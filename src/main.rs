@@ -2,90 +2,28 @@
 // TODO: VALIDATE LOG
 // TODO: ADD ERRORS
 
-use chrono::prelude::*;
-use sysinfo::{System};
+use parser::{ApacheLogPaser, LogParser};
+use sysinfo::System;
 
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::collections::HashMap;
 use std::error::Error;
 
 
-
-// Determine memory footprint
-#[derive(Debug)]
-struct LogEntry {
-    // Ip in Ipv6 format (Using net Ipadrr?)
-    ip: [u16;6],
-    timestamp: chrono::DateTime<chrono::Utc>,
-    method: String,
-    path: String,
-    status_code: u16,
-    response_size: usize,
-}
-
-
-// Apache log format
-
-// String or &str?
-fn parse_line(line: String) -> Result<LogEntry, Box<dyn std::error::Error>> {
-    let mut l = line;
-
-    // TODO: CONVERT TO NUMBERS
-    let ip = l.chars().take_while(|&c| c != ' ').collect::<String>();
-
-    // Not efficient? ( O(n) )
-    l = l.split_off(ip.len() + 6);
-
-
-    // Date operations 
-    let mut date = l.chars().take_while(|&c| c != ']').collect::<String>();
-    l = l.split_off(date.len() + 3);
-    let dt = DateTime::parse_from_str(&date, "%d/%b/%Y:%H:%M:%S %z").unwrap();
-
-
-    let args = l.chars().take_while(|&c| c != '"').collect::<String>();
-    l = l.split_off(args.len() + 2);
-
-
-    // Status codes go from 100 to 599 (500 options)
-    // 100 - 199 Info
-    // 200 - 299 Success
-    // 300 - 399 Redirection
-    // 400 - 499 Client error
-    // 500 - 599 Server error
-    let status = l.chars().take_while(|&c| c != ' ').collect::<String>();
-    l = l.split_off(status.len() + 1);
-
-    // Update hashmap of statusCodes to allow for frequency analysis
-    //*statusCode.entry(status).or_insert(0) += 1;
-
-
-    let mut size = l;
-
-
-    let entry = LogEntry {
-        ip: [0,0,0,0,0,0],
-        timestamp: dt.into(),
-
-        // TODO: EXTRACT INFO FROM ARGS
-        method: String::from("GET"),
-        path: String::from("/"),
-
-        status_code: status.parse::<u16>().unwrap(),
-        response_size: size.parse::<usize>().unwrap(), 
-    };
-
-    Ok(entry)
-}
+mod utils;
+mod parser;
 
 
 fn main() {
     let mut sys = System::new_all();
 
 
-    let mut entries: Vec<LogEntry> = Vec::new();
+    let logLevel = ["INFO", "WARNING", "ERROR", "CRITICAL"];
+    let parser = ApacheLogPaser;
+
+    let mut entries: Vec<utils::LogEntry> = Vec::new();
 
     //let mut log = LogEntry {ip: [255,255,255,255,255,255], timestamp: Utc::now(), method: String::from("DELETE"), path: String::from("/home/main/jh/5654561654164-4654654654"), status_code: 404, response_size: 2649};
     //println!("{}", std::mem::size_of::log);
@@ -94,10 +32,11 @@ fn main() {
     // Allocations
     //let mut err: Vec<u16> = Vec::with_capacity(500);
     //let mut err = vec![100; 50000000];
-    //let mut statusCode = HashMap::new();
-    //for i in 100..599 {
-    //    statusCode.insert(i, 0);
-    //}
+    
+    let mut statusCode = HashMap::new();
+    for i in 100..599 {
+       statusCode.insert(i, 0);
+    }
 
     let mut f = File::open("data/sample.log").unwrap();
     
@@ -112,25 +51,49 @@ fn main() {
 
     for line in file.lines() {
 
-        if let Ok(entry) = parse_line(line.unwrap()) {
+        //TODO: FIX
+        if let Ok(entry) = ApacheLogPaser::parse_line(line.unwrap()) {
             println!("{:?}", entry);
             entries.push(entry);
         }
-
-
-
         //println!("{}", dt.to_rfc2822());
-
     }
 
-    // println!("{:?}", entries[19999]);
-    
-    //for (key, value) in statusCode {
-    //    println!("Status {} has a frequency of {}", key, value);
-    //}
+    // TODO: FREQUENCY ANALYSIS
 
+
+    // TODO: LOGLEVEL ERROR
+    let mut errorCodes: Vec<usize> = Vec::new();
+    for (index, entry) in entries.iter().enumerate() {
+
+        // ERROR processing
+        // if (400..=599).contains(&entry.status_code) {
+        if entry.status_code <= 599 && entry.status_code >= 400 {
+            errorCodes.push(index);
+            *statusCode.entry(entry.status_code).or_insert(0) += 1;
+        }
+        //println!("{:?}", entry);
+    }
+
+    // println!("{:?}", errorCodes[11]);
+    
+    // for (key, value) in statusCode {
+        // if value > 0 { println!("Status {} has a frequency of {}", key, value); }
+    // }
+
+    // Convert HashMap to vec and sort by value
+    let mut sorted: Vec<_> = statusCode.iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(a.1));  // Sort in descending order
+    
+    // Print sorted results
+    for (code, count) in sorted {
+        if *count > 0 {
+            println!("Status {} has a frequency of {}", code, count);
+        }
+    }
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());
 
 }
+// TODO: SERIALIZE INTO JSON
