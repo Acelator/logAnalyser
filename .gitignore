@@ -1,3 +1,9 @@
 /target
+/log/
 
 .idea
+
+
+# Internal 
+TODO.md
+profile.json
