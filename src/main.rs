@@ -18,7 +18,7 @@ mod utils;
 fn main() {
     let mut sys = System::new_all();
 
-    let logLevel = ["INFO", "WARNING", "ERROR", "CRITICAL"];
+    let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
     let parser = ApacheLogPaser;
 
     let mut entries: Vec<utils::LogEntry> = Vec::new();
@@ -27,22 +27,22 @@ fn main() {
     //println!("{}", std::mem::size_of::log);
 
     // Allocations
-    let mut statusCode = HashMap::new();
+    let mut status_code = HashMap::new();
     // for i in 100..599 {
     // statusCode.insert(i, 0);
     // }
 
-    let mut pathFrequency: HashMap<u16, HashMap<String, i32>> = HashMap::new();
+    let mut path_frequency: HashMap<u16, HashMap<String, i32>> = HashMap::new();
     for i in 100..599 {
         let mut inner_map = HashMap::new();
         inner_map.insert(String::from(""), 0);
-        pathFrequency.insert(i, inner_map);
+        path_frequency.insert(i, inner_map);
     }
 
     // OPEN FILE
     let mut f = File::open("data/sample.log").expect("Specified file doesn't exist");
 
-    let linesAmount = BufReader::new(&f).lines().count();
+    let lines_amount = BufReader::new(&f).lines().count();
 
     // Point the buffer back to the start
     f.seek(SeekFrom::Start(0));
@@ -66,14 +66,14 @@ fn main() {
     // TODO: FREQUENCY ANALYSIS
 
     // TODO: LOGLEVEL ERROR
-    let mut errorCodes: Vec<usize> = Vec::new();
+    let mut error_codes: Vec<usize> = Vec::new();
     for (index, entry) in entries.iter().enumerate() {
         // ERROR processing
         // if (400..=599).contains(&entry.status_code) {
         if entry.status_code <= 599 && entry.status_code >= 400 {
-            errorCodes.push(index);
-            *statusCode.entry(entry.status_code).or_insert(0) += 1;
-            pathFrequency.entry(entry.status_code).and_modify(|e| {
+            error_codes.push(index);
+            *status_code.entry(entry.status_code).or_insert(0) += 1;
+            path_frequency.entry(entry.status_code).and_modify(|e| {
                 // e.entry(entry.path.clone()).and_modify(|v| *v += 1).or_insert(1);
                 *e.entry(entry.path.clone()).or_insert(0) += 1;
                 // println!("{}, {:?}", entry.status_code, e);
@@ -87,14 +87,14 @@ fn main() {
     // }
 
     // Convert HashMap to vec (of pairs) and sort by value
-    let mut sortedStatusCode: Vec<_> = statusCode.iter().collect();
-    sortedStatusCode.sort_by(|a, b| b.1.cmp(a.1)); // Sort in descending order
+    let mut sorted_status_code: Vec<_> = status_code.iter().collect();
+    sorted_status_code.sort_by(|a, b| b.1.cmp(a.1)); // Sort in descending order
 
     // Convert HashMap to vec (of pairs) and sort by value
     // let mut sortedPath: Vec<_> = pathFrequency.iter().collect();
     // sortedPath.sort_by(|a, b| (&(b.1).1).cmp(&(a.1).1));  // Sort in descending order
 
-    let sortedPath: Vec<_> = pathFrequency
+    let sorted_path: Vec<_> = path_frequency
         .iter()
         .map(|(k, v)| {
             let mut sorted: Vec<_> = v.iter().collect();
@@ -110,7 +110,7 @@ fn main() {
     // }
     // }
 
-    JsonOutput::output(linesAmount, &errorCodes, &sortedStatusCode, &sortedPath);
+    JsonOutput::output(lines_amount, &error_codes, &sorted_status_code, &sorted_path);
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());

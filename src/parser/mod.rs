@@ -29,7 +29,7 @@ impl LogParser for ApacheLogPaser {
         let args = l.chars().take_while(|&c| c != '"').collect::<String>();
         l = l.split_off(args.len() + 2);
 
-        let argsSegments: Vec<&str> = args.split(' ').collect();
+        let args_segments: Vec<&str> = args.split(' ').collect();
 
         // Status codes go from 100 to 599 (500 options)
         // 100 - 199 Info
@@ -50,9 +50,9 @@ impl LogParser for ApacheLogPaser {
             ip: toIp(ip),
             timestamp: dt.into(),
 
-            method: argsSegments[0].to_string(),
-            path: argsSegments[1].to_string(),
-            protocol: argsSegments[2].to_string(),
+            method: args_segments[0].to_string(),
+            path: args_segments[1].to_string(),
+            protocol: args_segments[2].to_string(),
 
             status_code: status.parse::<u16>()?,
             response_size: size.parse::<usize>()?,

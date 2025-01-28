@@ -5,10 +5,10 @@ use serde_json::{json, Result};
 
 pub trait OutputData {
     fn output(
-        linesCount: usize,
+        lines_count: usize,
         error: &Vec<usize>,
-        sortedStatusCode: &Vec<(&u16, &i32)>,
-        sortedPath: &Vec<(u16, Vec<(&String, &i32)>)>,
+        sorted_status_code: &Vec<(&u16, &i32)>,
+        sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
     );
 }
 
@@ -16,67 +16,67 @@ pub struct JsonOutput;
 
 impl OutputData for JsonOutput {
     fn output(
-        linesCount: usize,
+        lines_count: usize,
         error: &Vec<usize>,
-        sortedStatusCode: &Vec<(&u16, &i32)>,
-        sortedPath: &Vec<(u16, Vec<(&String, &i32)>)>,
+        sorted_status_code: &Vec<(&u16, &i32)>,
+        sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
     ) {
         let mut out = File::create("log/log.json").unwrap();
         let data = json!({
-            "total_logs": linesCount,
+            "total_logs": lines_count,
             "error_logs": error.len(),
             "most_common_error": [
                 {
-                    "status_code": sortedStatusCode[0].0,
-                    "frequency": sortedStatusCode[0].1,
+                    "status_code": sorted_status_code[0].0,
+                    "frequency": sorted_status_code[0].1,
                     "most_frequent_paths": [
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[0].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[0].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[0].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[0].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[1].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[1].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[1].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[1].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[2].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[2].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[2].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[2].1
                         }
                     ]
                 },
                 {
-                    "status_code": sortedStatusCode[1].0,
-                    "frequency": sortedStatusCode[1].1,
+                    "status_code": sorted_status_code[1].0,
+                    "frequency": sorted_status_code[1].1,
                     "most_frequent_paths": [
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[0].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[0].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[0].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[0].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[1].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[1].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[1].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[1].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[2].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[2].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[2].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[2].1
                         }
                     ]
                 },
                 {
-                    "status_code": sortedStatusCode[2].0,
-                    "frequency": sortedStatusCode[2].1,
+                    "status_code": sorted_status_code[2].0,
+                    "frequency": sorted_status_code[2].1,
                     "most_frequent_paths": [
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[0].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[0].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[0].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[0].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[1].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[1].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[1].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[1].1
                         },
                         {
-                            "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[2].0,
-                            "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[2].1
+                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[2].0,
+                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[2].1
                         }
                     ]
                 }
