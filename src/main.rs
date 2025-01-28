@@ -3,14 +3,19 @@
 // TODO: ADD ERRORS
 
 use output::{JsonOutput, OutputData};
+use hasher::md5;
 use parser::{ApacheLogPaser, LogParser};
+
 use sysinfo::System;
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
+use std::path::Path;
 
+mod hasher;
 mod output;
 mod parser;
 mod utils;
@@ -18,9 +23,42 @@ mod utils;
 fn main() {
     let mut sys = System::new_all();
 
-    let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
-    let parser = ApacheLogPaser;
+    let mut hash = String::from("");
+    let live_reload = true;
+    // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
+    // let parser = ApacheLogPaser;
+    // CHECKSUM
 
+    if live_reload {
+        // while true
+        let mut i = 0;
+        while i < 4 {
+            // TODO: Create checkpoints (100mb for example and compute its checksum) so when comparing instead of doing it against all the file
+            // TODO     it can be made on each partition. Also good potential for concurrency.
+            let f_str = fs::read_to_string(Path::new("data/sample.log")).unwrap();
+            let current_hash = md5(&f_str);
+            println!("{}", current_hash);
+
+            if current_hash != hash {
+                println!("IM TIRED BOSS");
+                mainLogic();
+            } else {
+                println!("ZZZZ MUCHO SUENO");
+            }
+
+            hash = current_hash;
+            i += 1;
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+    } else {
+        mainLogic();
+    }
+
+    sys.refresh_all();
+    println!("used memory : {} bytes", sys.used_memory());
+}
+
+fn mainLogic() {
     let mut entries: Vec<utils::LogEntry> = Vec::new();
 
     //let mut log = LogEntry {ip: [255,255,255,255,255,255], timestamp: Utc::now(), method: String::from("DELETE"), path: String::from("/home/main/jh/5654561654164-4654654654"), status_code: 404, response_size: 2649};
@@ -40,7 +78,8 @@ fn main() {
     }
 
     // OPEN FILE
-    let mut f = File::open("data/sample.log").expect("Specified file doesn't exist");
+
+    let mut f = File::open(Path::new("data/sample.log")).expect("Specified file doesn't exist");
 
     let lines_amount = BufReader::new(&f).lines().count();
 
@@ -110,8 +149,10 @@ fn main() {
     // }
     // }
 
-    JsonOutput::output(lines_amount, &error_codes, &sorted_status_code, &sorted_path);
-
-    sys.refresh_all();
-    println!("used memory : {} bytes", sys.used_memory());
+    JsonOutput::output(
+        lines_amount,
+        &error_codes,
+        &sorted_status_code,
+        &sorted_path,
+    );
 }
