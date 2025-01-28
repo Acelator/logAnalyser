@@ -1,4 +1,4 @@
-use crate::utils::{self, LogEntry};
+use crate::utils::*;
 
 use chrono::prelude::*;
 
@@ -16,7 +16,6 @@ impl LogParser for ApacheLogPaser {
     fn parse_line(line: String) -> Result<LogEntry, Box<dyn std::error::Error>> {
         let mut l = line;
 
-        // TODO: CONVERT TO NUMBERS
         let ip = l.chars().take_while(|&c| c != ' ').collect::<String>();
 
         // Not efficient? ( O(n) )
@@ -25,7 +24,7 @@ impl LogParser for ApacheLogPaser {
         // Date operations
         let date = l.chars().take_while(|&c| c != ']').collect::<String>();
         l = l.split_off(date.len() + 3);
-        let dt = DateTime::parse_from_str(&date, "%d/%b/%Y:%H:%M:%S %z").unwrap();
+        let dt = DateTime::parse_from_str(&date, "%d/%b/%Y:%H:%M:%S %z")?;
 
         let args = l.chars().take_while(|&c| c != '"').collect::<String>();
         l = l.split_off(args.len() + 2);
@@ -48,16 +47,15 @@ impl LogParser for ApacheLogPaser {
 
         // Everything is parsed, now we can create the LogEntry
         let entry = LogEntry {
-            ip: utils::toIp(ip),
+            ip: toIp(ip),
             timestamp: dt.into(),
 
-            // TODO: EXTRACT INFO FROM ARGS
             method: argsSegments[0].to_string(),
             path: argsSegments[1].to_string(),
             protocol: argsSegments[2].to_string(),
 
-            status_code: status.parse::<u16>().unwrap(),
-            response_size: size.parse::<usize>().unwrap(),
+            status_code: status.parse::<u16>()?,
+            response_size: size.parse::<usize>()?,
         };
 
         Ok(entry)

@@ -2,16 +2,16 @@
 // TODO: VALIDATE LOG
 // TODO: ADD ERRORS
 
+use output::{JsonOutput, OutputData};
 use parser::{ApacheLogPaser, LogParser};
 use sysinfo::System;
-
-use serde_json::{json, Result};
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 
+mod output;
 mod parser;
 mod utils;
 
@@ -27,9 +27,6 @@ fn main() {
     //println!("{}", std::mem::size_of::log);
 
     // Allocations
-    //let mut err: Vec<u16> = Vec::with_capacity(500);
-    //let mut err = vec![100; 50000000];
-
     let mut statusCode = HashMap::new();
     // for i in 100..599 {
     // statusCode.insert(i, 0);
@@ -43,7 +40,7 @@ fn main() {
     }
 
     // OPEN FILE
-    let mut f = File::open("data/sample.log").unwrap();
+    let mut f = File::open("data/sample.log").expect("Specified file doesn't exist");
 
     let linesAmount = BufReader::new(&f).lines().count();
 
@@ -54,8 +51,12 @@ fn main() {
     let file = BufReader::new(f);
 
     for line in file.lines() {
-        //TODO: FIX
-        if let Ok(entry) = ApacheLogPaser::parse_line(line.unwrap()) {
+        if let Ok(entry) = ApacheLogPaser::parse_line(line.unwrap_or_else(|e| {
+            panic!(
+                "Problem parsing the file with the specified parser, Error: {:?}",
+                e
+            );
+        })) {
             // println!("{:?}", entry);
             entries.push(entry);
         }
@@ -80,8 +81,6 @@ fn main() {
         }
         //println!("{:?}", entry);
     }
-
-    // println!("{:?}", errorCodes[11]);
 
     // for (key, value) in statusCode {
     // if value > 0 { println!("Status {} has a frequency of {}", key, value); }
@@ -111,73 +110,7 @@ fn main() {
     // }
     // }
 
-    let mut out = File::create("log/log.json").unwrap();
-    let data = json!({
-        "total_logs": linesAmount,
-        "error_logs": errorCodes.len(),
-        "most_common_error": [
-            {
-                "status_code": sortedStatusCode[0].0,
-                "frequency": sortedStatusCode[0].1,
-                "most_frequent_paths": [
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[0].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[0].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[1].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[1].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[2].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[0].0).unwrap().1[2].1
-                    }
-                ]
-            },
-            {
-                "status_code": sortedStatusCode[1].0,
-                "frequency": sortedStatusCode[1].1,
-                "most_frequent_paths": [
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[0].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[0].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[1].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[1].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[2].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[1].0).unwrap().1[2].1
-                    }
-                ]
-            },
-            {
-                "status_code": sortedStatusCode[2].0,
-                "frequency": sortedStatusCode[2].1,
-                "most_frequent_paths": [
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[0].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[0].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[1].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[1].1
-                    },
-                    {
-                        "path": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[2].0,
-                        "frequency": sortedPath.iter().find(|&&(code, _)| code == *sortedStatusCode[2].0).unwrap().1[2].1
-                    }
-                ]
-            }
-        ],
-    });
-
-    // let json = serde_json::to_string(&entries).unwrap();
-    // let json = serde_json::to_string(&data).unwrap();
-    // out.write_all(json).unwrap();
-
-    out.write_all(data.to_string().as_bytes()).unwrap();
+    JsonOutput::output(linesAmount, &errorCodes, &sortedStatusCode, &sortedPath);
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());

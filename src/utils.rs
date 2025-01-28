@@ -15,7 +15,7 @@ pub struct LogEntry {
 }
 
 
-// OPTIMIZAR -> 13% of time spent here
+// OPTIMIZAR -> >10% of time spent here
 pub fn toIp(l: String) -> [u16; 6] {
     let mut ip: [u16;6] = [0,0,0,0,0,0];
 
