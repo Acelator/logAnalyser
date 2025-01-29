@@ -47,7 +47,7 @@ impl LogParser for ApacheLogPaser {
 
         // Everything is parsed, now we can create the LogEntry
         let entry = LogEntry {
-            ip: toIp(ip),
+            ip: to_ip(ip),
             timestamp: dt.into(),
 
             method: args_segments[0].to_string(),

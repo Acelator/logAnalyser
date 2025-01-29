@@ -1,7 +1,8 @@
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 
-use serde_json::{json, Result};
+use serde_json::json;
 
 pub trait OutputData {
     fn output(
@@ -21,7 +22,7 @@ impl OutputData for JsonOutput {
         sorted_status_code: &Vec<(&u16, &i32)>,
         sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
     ) {
-        let mut out = File::create("log/log.json").unwrap();
+        let mut out = File::create(Path::new("log/log.json")).unwrap();
         let data = json!({
             "total_logs": lines_count,
             "error_logs": error.len(),

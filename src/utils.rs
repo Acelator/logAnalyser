@@ -1,10 +1,10 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 // Determine memory footprint
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogEntry {
     // Ip in Ipv6 format (Using net IpAdrr?)
-    pub ip: [u16;6],
+    pub ip: [u16; 6],
     #[serde(with = "chrono::serde::ts_seconds")]
     pub timestamp: chrono::DateTime<chrono::Utc>,
     pub method: String,
@@ -14,20 +14,26 @@ pub struct LogEntry {
     pub response_size: usize,
 }
 
-
 // OPTIMIZAR -> >10% of time spent here
-pub fn toIp(l: String) -> [u16; 6] {
-    let mut ip: [u16;6] = [0,0,0,0,0,0];
+pub fn to_ip(l: String) -> [u16; 6] {
+    let mut ip: [u16; 6] = [0, 0, 0, 0, 0, 0];
 
     let segments: Vec<&str> = l.split('.').collect();
 
     // Convert each segment to u16, up to 6 segments
     for (i, segment) in segments.iter().enumerate() {
-        if i >= 6 { break; }  // Don't exceed array bounds
-        
+        if i >= 6 {
+            break;
+        } // Don't exceed array bounds
+
         ip[i] = segment.parse::<u16>().unwrap_or(0);
     }
-    
 
     ip
 }
+
+// fn seek_read(mut reader: impl Read + Seek, offset: u64, buf: &mut [u8]) -> io::Result<()> {
+//     reader.seek(SeekFrom::Start(offset))?;
+//     reader.read_exact(buf)?;
+//     Ok(())
+// }

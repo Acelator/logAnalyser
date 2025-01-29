@@ -2,18 +2,17 @@
 // TODO: VALIDATE LOG
 // TODO: ADD ERRORS
 
-use hasher::{md5, md5_bits};
+use hasher::md5_bits;
 use output::{JsonOutput, OutputData};
 use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use core::hash;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 mod hasher;
@@ -24,10 +23,21 @@ mod utils;
 fn main() {
     let mut sys = System::new_all();
 
-    let metadata = fs::metadata(Path::new("data/sample.log")).expect("No metadata on file");
+    // Config
+    // TODO: ALLOW CLI TO CHANGE VALUES
 
-    // In megabytes (Mb)
-    let partitions = std::cmp::max(metadata.len().div_ceil(2_u64.pow(20)) - 1, 1);
+    let log_file_path = Path::new("data/sample.log");
+    let live_reload = true;
+    // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
+    // let parser = ApacheLogPaser;
+    // let output_mode = JsonOutput;
+
+    //* Main program  */
+    let metadata = fs::metadata(log_file_path).expect("No metadata on file");
+
+    // Numbers of partitions needed to split the file with 200mb each one
+    let mb = 20;
+    let partitions = std::cmp::max(metadata.len().div_ceil(2_u64.pow(mb)) - 1, 1);
     println!("Partitions required are {}", partitions);
 
     let mut hashes: Vec<String> = Vec::with_capacity(partitions as usize);
@@ -36,23 +46,19 @@ fn main() {
         hashes.push(String::from(""));
     }
 
-    let live_reload = true;
-
-    // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
-    // let parser = ApacheLogPaser;
     // CHECKSUM
 
     if live_reload {
         // while true
         let mut i = 0;
         while i < 4 {
-            let mut f = File::open(Path::new("data/sample.log")).expect("File doesn't exist");
+            let mut f = File::open(log_file_path).expect("File doesn't exist");
 
             for _i in 0..partitions {
-                f.seek(SeekFrom::Start((2_i32.pow(20) as u64 * _i)))
+                f.seek(SeekFrom::Start((2_i32.pow(mb) as u64 * _i)))
                     .unwrap();
 
-                let mut buf = vec![0u8; 2_u64.pow(20) as usize];
+                let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
                 f.read_exact(&mut buf).unwrap();
 
                 let current_hash_i = md5_bits(&mut buf);
@@ -60,12 +66,12 @@ fn main() {
 
                 if current_hash_i != hashes[_i as usize] {
                     println!("IM TIRED BOSS");
-                    mainLogic();
+                    mainLogic(log_file_path);
 
                     for j in _i..partitions {
-                        f.seek(SeekFrom::Start(2_i32.pow(20) as u64 * j)).unwrap();
+                        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j)).unwrap();
 
-                        let mut buf = vec![0u8; 2_u64.pow(20) as usize];
+                        let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
                         f.read_exact(&mut buf).unwrap();
 
                         let current_hash_j = md5_bits(&mut buf);
@@ -83,14 +89,14 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_secs(5));
         }
     } else {
-        mainLogic();
+        mainLogic(log_file_path);
     }
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());
 }
 
-fn mainLogic() {
+fn mainLogic(log_file_path: &Path) {
     let mut entries: Vec<utils::LogEntry> = Vec::new();
 
     //let mut log = LogEntry {ip: [255,255,255,255,255,255], timestamp: Utc::now(), method: String::from("DELETE"), path: String::from("/home/main/jh/5654561654164-4654654654"), status_code: 404, response_size: 2649};
@@ -111,12 +117,12 @@ fn mainLogic() {
 
     // OPEN FILE
 
-    let mut f = File::open(Path::new("data/sample.log")).expect("Specified file doesn't exist");
+    let mut f = File::open(log_file_path).expect("Specified file doesn't exist");
 
     let lines_amount = BufReader::new(&f).lines().count();
 
     // Point the buffer back to the start
-    f.seek(SeekFrom::Start(0));
+    let _ = f.seek(SeekFrom::Start(0));
 
     // Add a reader buffer
     let file = BufReader::new(f);
