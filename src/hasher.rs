@@ -276,7 +276,7 @@ fn convert_u8_chunk_to_u32(chunk: &mut [u8]) -> Vec<u32> {
     return x;
 }
 
-fn compute_md5_digest(mut v: Vec<u8>) -> String {
+fn compute_md5_digest(mut v: &mut Vec<u8>) -> String {
     // as described in the rfc,
     // 4 32-bit words initialized as fixed constants.
     let mut word_a = 0x67452301u32;
@@ -424,6 +424,10 @@ fn convert_str_to_vec(input: &str) -> Vec<u8> {
 *    (This is a simplification, but describes the core functionality)
 */
 pub fn md5(input: &str) -> String {
-    let input_vec = bit_padding(input);
-    return compute_md5_digest(input_vec);
+    let mut input_vec = bit_padding(input);
+    return compute_md5_digest(&mut input_vec);
+}
+
+pub fn md5_bits(input: & mut Vec<u8>) -> String {
+    return compute_md5_digest(input);
 }

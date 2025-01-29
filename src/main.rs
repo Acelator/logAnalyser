@@ -2,17 +2,18 @@
 // TODO: VALIDATE LOG
 // TODO: ADD ERRORS
 
+use hasher::{md5, md5_bits};
 use output::{JsonOutput, OutputData};
-use hasher::md5;
 use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
+use core::hash;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 mod hasher;
@@ -23,8 +24,20 @@ mod utils;
 fn main() {
     let mut sys = System::new_all();
 
-    let mut hash = String::from("");
+    let metadata = fs::metadata(Path::new("data/sample.log")).expect("No metadata on file");
+
+    // In megabytes (Mb)
+    let partitions = std::cmp::max(metadata.len().div_ceil(2_u64.pow(20)) - 1, 1);
+    println!("Partitions required are {}", partitions);
+
+    let mut hashes: Vec<String> = Vec::with_capacity(partitions as usize);
+
+    for _i in 0..partitions {
+        hashes.push(String::from(""));
+    }
+
     let live_reload = true;
+
     // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
     // let parser = ApacheLogPaser;
     // CHECKSUM
@@ -33,20 +46,39 @@ fn main() {
         // while true
         let mut i = 0;
         while i < 4 {
-            // TODO: Create checkpoints (100mb for example and compute its checksum) so when comparing instead of doing it against all the file
-            // TODO     it can be made on each partition. Also good potential for concurrency.
-            let f_str = fs::read_to_string(Path::new("data/sample.log")).unwrap();
-            let current_hash = md5(&f_str);
-            println!("{}", current_hash);
+            let mut f = File::open(Path::new("data/sample.log")).expect("File doesn't exist");
 
-            if current_hash != hash {
-                println!("IM TIRED BOSS");
-                mainLogic();
-            } else {
-                println!("ZZZZ MUCHO SUENO");
+            for _i in 0..partitions {
+                f.seek(SeekFrom::Start((2_i32.pow(20) as u64 * _i)))
+                    .unwrap();
+
+                let mut buf = vec![0u8; 2_u64.pow(20) as usize];
+                f.read_exact(&mut buf).unwrap();
+
+                let current_hash_i = md5_bits(&mut buf);
+                // println!("{}", current_hash_i);
+
+                if current_hash_i != hashes[_i as usize] {
+                    println!("IM TIRED BOSS");
+                    mainLogic();
+
+                    for j in _i..partitions {
+                        f.seek(SeekFrom::Start(2_i32.pow(20) as u64 * j)).unwrap();
+
+                        let mut buf = vec![0u8; 2_u64.pow(20) as usize];
+                        f.read_exact(&mut buf).unwrap();
+
+                        let current_hash_j = md5_bits(&mut buf);
+                        hashes[j as usize] = current_hash_j;
+                    }
+                    break;
+                } else {
+                    hashes[_i as usize] = current_hash_i;
+                    println!("ZZZZ MUCHO SUENO");
+                }
             }
 
-            hash = current_hash;
+            println!("{:?}", hashes);
             i += 1;
             std::thread::sleep(std::time::Duration::from_secs(5));
         }
