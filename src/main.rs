@@ -3,10 +3,12 @@
 // TODO: ADD ERRORS
 
 use hasher::md5_bits;
-use output::{JsonOutput, OutputData};
+use output::{DatabaseOutput, JsonOutput, OutputData};
 use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
+
+use rusqlite::{Connection, Result};
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -20,8 +22,43 @@ mod output;
 mod parser;
 mod utils;
 
-fn main() {
+const DEV: bool = true;
+
+fn main() -> Result<()> {
     let mut sys = System::new_all();
+
+    let conn = Connection::open("db/main.db")?;
+
+    if DEV {
+        let _ = conn.execute("DROP table logs;", []);
+    }
+    
+    //TODO? change ip to number?
+    // PREPARATE DB CONNECTION, IN FUTURE CHANGE IT
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY,
+            ip TEXT NOT NULL,
+            method TEXT NOT NULL,
+            path TEXT NOT NULL,
+            status_code INTEGER NOT NULL,
+            response_size INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    // conn.execute(
+    //     "CREATE TABLE IF NOT EXISTS logs (
+    //         id INTEGER PRIMARY KEY,
+    //         ip TEXT NOT NULL,
+    //         -- timestamp DATETIME NOT NULL,
+    //         method TEXT NOT NULL,
+    //         path TEXT NOT NULL,
+    //         status_code INTEGER NOT NULL,
+    //         response_size INTEGER NOT NULL
+    //     )",
+    //     [],
+    // )?;
 
     // Config
     // TODO: ALLOW CLI TO CHANGE VALUES
@@ -94,6 +131,8 @@ fn main() {
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());
+
+    Ok(())
 }
 
 fn mainLogic(log_file_path: &Path) {
@@ -187,10 +226,21 @@ fn mainLogic(log_file_path: &Path) {
     // }
     // }
 
-    JsonOutput::output(
+    // JsonOutput::output(
+    //     lines_amount,
+    //     &error_codes,
+    //     &sorted_status_code,
+    //     &sorted_path,
+    //     None
+    // );
+
+    let conn = Connection::open("db/main.db").expect("msg");
+    DatabaseOutput::output(
         lines_amount,
         &error_codes,
         &sorted_status_code,
         &sorted_path,
+        &entries,
+        Option::Some(conn),
     );
 }
