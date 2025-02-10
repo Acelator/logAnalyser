@@ -1,4 +1,9 @@
+use std::io::{Read, Seek, SeekFrom};
+use std::fs::{File, metadata};
+
 use serde::{Deserialize, Serialize};
+
+use crate::hasher::md5_bits;
 
 // Determine memory footprint
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,3 +42,48 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     reader.read_exact(buf)?;
 //     Ok(())
 // }
+
+pub fn compute_partitions(
+    path: &std::path::Path,
+    mb: u32,
+    mut hash: &mut Vec<String>,
+) -> String {
+    let mut f = File::open(path).expect("File doesn't exist");
+
+    let partitions: u64 = std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
+
+    for _i in 0..partitions {
+        f.seek(SeekFrom::Start((2_i32.pow(mb) as u64 * _i)))
+            .unwrap();
+
+        let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
+        f.read_exact(&mut buf).unwrap();
+
+        let current_hash_i = md5_bits(&mut buf);
+        println!("size {}", std::mem::size_of_val(&current_hash_i));
+
+        if current_hash_i != hash[_i as usize] {
+            println!("IM TIRED BOSS");
+            for j in _i..partitions {
+                f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j)).unwrap();
+
+                let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
+                f.read_exact(&mut buf).unwrap();
+
+                let current_hash_j = md5_bits(&mut buf);
+                hash[j as usize] = current_hash_j;
+            }
+            break;
+        } else {
+            hash[_i as usize] = current_hash_i;
+            println!("ZZZZ MUCHO SUENO");
+        }
+    }
+
+    let mut hash_str = String::new();
+    for hash in hash {
+        hash_str.push_str(hash);
+    }
+
+    hash_str
+}

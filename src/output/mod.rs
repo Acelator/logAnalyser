@@ -128,6 +128,8 @@ impl OutputData for DatabaseOutput {
         )
         .expect("Failed to set PRAGMA");
 
+
+        // TODO!: LOGS ARE BEING STORE EACH TIME
         let tx = conn.transaction().expect("Failed to create transaction");
 
         {

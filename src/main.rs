@@ -8,7 +8,8 @@ use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use rusqlite::{Connection, Result};
+use rusqlite::{params, Connection, Result};
+use utils::compute_partitions;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -27,18 +28,19 @@ const DEV: bool = true;
 fn main() -> Result<()> {
     let mut sys = System::new_all();
 
-    let conn = Connection::open("db/main.db")?;
+    let mut conn = Connection::open("db/main.db")?;
 
     if DEV {
         let _ = conn.execute("DROP table logs;", []);
     }
-    
-    //TODO? change ip to number?
+
     // PREPARATE DB CONNECTION, IN FUTURE CHANGE IT
+    //TODO? change ip to number?
     conn.execute(
         "CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY,
             ip TEXT NOT NULL,
+            -- timestamp DATETIME NOT NULL,
             method TEXT NOT NULL,
             path TEXT NOT NULL,
             status_code INTEGER NOT NULL,
@@ -46,19 +48,6 @@ fn main() -> Result<()> {
         )",
         [],
     )?;
-
-    // conn.execute(
-    //     "CREATE TABLE IF NOT EXISTS logs (
-    //         id INTEGER PRIMARY KEY,
-    //         ip TEXT NOT NULL,
-    //         -- timestamp DATETIME NOT NULL,
-    //         method TEXT NOT NULL,
-    //         path TEXT NOT NULL,
-    //         status_code INTEGER NOT NULL,
-    //         response_size INTEGER NOT NULL
-    //     )",
-    //     [],
-    // )?;
 
     // Config
     // TODO: ALLOW CLI TO CHANGE VALUES
@@ -72,9 +61,8 @@ fn main() -> Result<()> {
     //* Main program  */
     let metadata = fs::metadata(log_file_path).expect("No metadata on file");
 
-    // Numbers of partitions needed to split the file with 200mb each one
-    let mb = 20;
-    let partitions = std::cmp::max(metadata.len().div_ceil(2_u64.pow(mb)) - 1, 1);
+    let mb = 20; // Numbers of partitions needed to split the file with 200mb each one
+    let partitions: u64 = std::cmp::max(metadata.len().div_ceil(2_u64.pow(mb)) - 1, 1);
     println!("Partitions required are {}", partitions);
 
     let mut hashes: Vec<String> = Vec::with_capacity(partitions as usize);
@@ -83,42 +71,40 @@ fn main() -> Result<()> {
         hashes.push(String::from(""));
     }
 
-    // CHECKSUM
+    if DEV {
+        let _ = conn.execute("DROP table hash;", []);
+    }
 
+    // Each MD5 hash is 32 characters long
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS hash (
+            id INTEGER PRIMARY KEY,
+            path TEXT NOT NULL,
+            hash TEXT NOT NULL
+        )",
+        [],
+    )?;
+
+    // CHECKSUM
     if live_reload {
         // while true
         let mut i = 0;
         while i < 4 {
-            let mut f = File::open(log_file_path).expect("File doesn't exist");
 
-            for _i in 0..partitions {
-                f.seek(SeekFrom::Start((2_i32.pow(mb) as u64 * _i)))
-                    .unwrap();
+            // TODO! Check if hash already exists in db, in that case it should be passed as "hashes"
+            // TODO! Also if it hasn't been changed it shouldn't be store again
+            let hash_str = compute_partitions(log_file_path, mb, &mut hashes);
+            println!("hashstr {:?}", hash_str);
 
-                let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-                f.read_exact(&mut buf).unwrap();
-
-                let current_hash_i = md5_bits(&mut buf);
-                // println!("{}", current_hash_i);
-
-                if current_hash_i != hashes[_i as usize] {
-                    println!("IM TIRED BOSS");
-                    mainLogic(log_file_path);
-
-                    for j in _i..partitions {
-                        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j)).unwrap();
-
-                        let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-                        f.read_exact(&mut buf).unwrap();
-
-                        let current_hash_j = md5_bits(&mut buf);
-                        hashes[j as usize] = current_hash_j;
-                    }
-                    break;
-                } else {
-                    hashes[_i as usize] = current_hash_i;
-                    println!("ZZZZ MUCHO SUENO");
-                }
+            // SAVE TO DB
+            {
+                let tx = conn.transaction().unwrap();
+                tx.execute(
+                    "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
+                    params![log_file_path.to_str().unwrap(), hash_str],
+                )
+                .expect("ERROR STORING HASH");
+                tx.commit().expect("Failed to commit transaction");
             }
 
             println!("{:?}", hashes);
@@ -128,6 +114,8 @@ fn main() -> Result<()> {
     } else {
         mainLogic(log_file_path);
     }
+
+    conn.close().expect("Err closing db");
 
     sys.refresh_all();
     println!("used memory : {} bytes", sys.used_memory());
