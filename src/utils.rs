@@ -100,6 +100,6 @@ pub struct Config {
     #[arg(short, long)]
     pub path: String,
 
-    #[arg(short, long, default_value = "true")]
+    #[arg(short, long, action)]
     pub live_reload: bool,
 }
