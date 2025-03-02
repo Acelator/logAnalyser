@@ -9,7 +9,8 @@ use parser::{ApacheLogPaser, LogParser};
 use sysinfo::System;
 
 use rusqlite::{params, Connection, Result, Rows};
-use utils::{compute_hash, hash};
+use utils::{compute_hash, hash, Config};
+use clap::{Args, Parser};
 
 use core::error;
 use std::collections::HashMap;
@@ -29,6 +30,7 @@ const DEV: bool = true;
 fn main() -> Result<()> {
     let mut sys = System::new_all();
 
+    
     let mut conn = Connection::open("db/main.db")?;
 
     if DEV {
@@ -51,10 +53,11 @@ fn main() -> Result<()> {
     )?;
 
     // Config
-    // TODO: ALLOW CLI TO CHANGE VALUES
 
-    let log_file_path = Path::new("data/sample.log");
-    let live_reload = true;
+    let config = Config::parse();
+    println!("CONFIG: {:?}", config);
+
+    let log_file_path = Path::new(&config.path);
     // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
     // let parser = ApacheLogPaser;
     // let output_mode = JsonOutput;
@@ -88,7 +91,7 @@ fn main() -> Result<()> {
     )?;
 
     // CHECKSUM
-    if live_reload {
+    if config.live_reload {
         // while true
         let mut i = 0;
         while i < 4 {
