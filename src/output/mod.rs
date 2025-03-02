@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
 use serde_json::json;
 
 use crate::utils::LogEntry;
@@ -105,10 +105,10 @@ impl OutputData for JsonOutput {
 // Clenup trait param to only use sorted status ...etc in JsonOutput
 impl OutputData for DatabaseOutput {
     fn output(
-        lines_count: usize,
-        error: &Vec<usize>,
-        sorted_status_code: &Vec<(&u16, &i32)>,
-        sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
+        _lines_count: usize,
+        _error: &Vec<usize>,
+        _sorted_status_code: &Vec<(&u16, &i32)>,
+        _sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
         entries: &Vec<LogEntry>,
         db: Option<Connection>,
     ) {

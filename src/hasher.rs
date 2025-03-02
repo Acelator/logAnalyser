@@ -276,7 +276,7 @@ fn convert_u8_chunk_to_u32(chunk: &mut [u8]) -> Vec<u32> {
     return x;
 }
 
-fn compute_md5_digest(mut v: &mut Vec<u8>) -> String {
+fn compute_md5_digest(v: &mut Vec<u8>) -> String {
     // as described in the rfc,
     // 4 32-bit words initialized as fixed constants.
     let mut word_a = 0x67452301u32;
@@ -356,6 +356,7 @@ fn compute_md5_digest(mut v: &mut Vec<u8>) -> String {
 * 3. With the last 64 bits, append the length in 64 bits
 *    (in lower-order bits first).
 */
+#[allow(dead_code)]
 fn bit_padding(input: &str) -> Vec<u8> {
     let mut input_vector: Vec<u8> = convert_str_to_vec(input);
     let bit_length: u64 = (input.len() as u64) * 8u64; // todo - add support for > 2^64 bit size
@@ -423,6 +424,7 @@ fn convert_str_to_vec(input: &str) -> Vec<u8> {
 *    during our bitwise operations to retrieve our message digest.
 *    (This is a simplification, but describes the core functionality)
 */
+#[allow(dead_code)]
 pub fn md5(input: &str) -> String {
     let mut input_vec = bit_padding(input);
     return compute_md5_digest(&mut input_vec);

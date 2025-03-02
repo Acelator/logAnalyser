@@ -1,7 +1,7 @@
 use std::fs::{metadata, File};
 use std::io::{Read, Seek, SeekFrom};
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{command, Parser};
 use serde::{Deserialize, Serialize};
@@ -46,14 +46,14 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     Ok(())
 // }
 
-pub fn compute_hash(path: &std::path::Path, mb: u32, mut hash: &mut Vec<String>) -> String {
+pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> String {
     let mut f = File::open(path).expect("File doesn't exist");
 
     let partitions: u64 =
         std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
 
     for _i in 0..partitions {
-        f.seek(SeekFrom::Start((2_i32.pow(mb) as u64 * _i)))
+        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))
             .unwrap();
 
         let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
@@ -89,7 +89,8 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, mut hash: &mut Vec<String>)
 }
 
 #[derive(Debug)]
-pub struct hash {
+pub struct Hash {
+    #[allow(dead_code)]
     pub path: PathBuf,
     pub hash: String,
 }
@@ -100,6 +101,6 @@ pub struct Config {
     #[arg(short, long)]
     pub path: String,
 
-    #[arg(short, long, action)]
+    #[arg(short, long)]
     pub live_reload: bool,
 }

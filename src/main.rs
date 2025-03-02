@@ -2,22 +2,19 @@
 // TODO: VALIDATE LOG
 // TODO: ADD ERRORS
 
-use hasher::md5_bits;
-use output::{DatabaseOutput, JsonOutput, OutputData};
+use output::{DatabaseOutput, OutputData};
 use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use rusqlite::{params, Connection, Result, Rows};
-use utils::{compute_hash, hash, Config};
-use clap::{Args, Parser};
+use rusqlite::{params, Connection, Result};
+use utils::{compute_hash, Hash, Config};
+use clap::Parser;
 
-use core::error;
 use std::collections::HashMap;
-use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 mod hasher;
@@ -102,30 +99,29 @@ fn main() -> Result<()> {
             let p = log_file_path.to_str().unwrap();
             println!("PATH IS {}", p);
 
-            let a: Result<hash> =
+            let fetched_hash_result: Result<Hash> =
                 conn.query_row("SELECT * FROM hash WHERE path = ?1", params![p], |row| {
                     println!("/ROW: {:?}", row.get::<_, String>(1)?);
-                    Ok(hash {
+                    Ok(Hash {
                         path: PathBuf::from(row.get::<_, String>(1)?),
                         hash: row.get(2)?,
                     })
                 });
-            // let a = conn.query_row("SELECT * FROM hash WHERE path = p")?;
 
-            match a {
+            match fetched_hash_result {
                 Ok(hash) => {
-                    println!(" CURRENT HASH");
-                    println!("{:?}", hash);
+                    println!("CURRENT HASH: {:?}", hash);
 
                     // TODO: CHANGE NAMES
                     current_hash = hash.hash;
                 }
 
-                // We need to check if the problem is that there isnt a record associated to that file
-                //  or if it is another err.
                 Err(e) => match e {
+                    // The file hasn't stored a hash before. We can safely continue 
                     rusqlite::Error::QueryReturnedNoRows => {}
-                    _other => panic!("HELPDAS"),
+
+                    // To define later
+                    _other => panic!("Err quering hash from DB"),
                 },
             }
 
@@ -151,14 +147,14 @@ fn main() -> Result<()> {
                 println!("{:?}", hashes);
 
                 println!("WORKING");
-                mainLogic(log_file_path);
+                main_logic(log_file_path);
             }
 
             i += 1;
             std::thread::sleep(std::time::Duration::from_secs(5));
         }
     } else {
-        mainLogic(log_file_path);
+        main_logic(log_file_path);
     }
 
     conn.close().expect("Err closing db");
@@ -169,7 +165,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn mainLogic(log_file_path: &Path) {
+fn main_logic(log_file_path: &Path) {
     let mut entries: Vec<utils::LogEntry> = Vec::new();
 
     //let mut log = LogEntry {ip: [255,255,255,255,255,255], timestamp: Utc::now(), method: String::from("DELETE"), path: String::from("/home/main/jh/5654561654164-4654654654"), status_code: 404, response_size: 2649};
