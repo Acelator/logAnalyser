@@ -8,15 +8,16 @@ use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use rusqlite::{params, Connection, Result};
-use utils::compute_partitions;
+use rusqlite::{params, Connection, Result, Rows};
+use utils::{compute_hash, hash};
 
+use core::error;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::path::Path;
+use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 
 mod hasher;
 mod output;
@@ -76,6 +77,7 @@ fn main() -> Result<()> {
     }
 
     // Each MD5 hash is 32 characters long
+    // ! Cant return id
     conn.execute(
         "CREATE TABLE IF NOT EXISTS hash (
             id INTEGER PRIMARY KEY,
@@ -90,24 +92,65 @@ fn main() -> Result<()> {
         // while true
         let mut i = 0;
         while i < 4 {
+            println!("STARTING MAIN LOOP");
+
+            let mut current_hash = String::from("");
+
+            let p = log_file_path.to_str().unwrap();
+            println!("PATH IS {}", p);
+
+            let a: Result<hash> =
+                conn.query_row("SELECT * FROM hash WHERE path = ?1", params![p], |row| {
+                    println!("/ROW: {:?}", row.get::<_, String>(1)?);
+                    Ok(hash {
+                        path: PathBuf::from(row.get::<_, String>(1)?),
+                        hash: row.get(2)?,
+                    })
+                });
+            // let a = conn.query_row("SELECT * FROM hash WHERE path = p")?;
+
+            match a {
+                Ok(hash) => {
+                    println!(" CURRENT HASH");
+                    println!("{:?}", hash);
+
+                    // TODO: CHANGE NAMES
+                    current_hash = hash.hash;
+                }
+
+                // We need to check if the problem is that there isnt a record associated to that file
+                //  or if it is another err.
+                Err(e) => match e {
+                    rusqlite::Error::QueryReturnedNoRows => {}
+                    _other => panic!("HELPDAS"),
+                },
+            }
 
             // TODO! Check if hash already exists in db, in that case it should be passed as "hashes"
             // TODO! Also if it hasn't been changed it shouldn't be store again
-            let hash_str = compute_partitions(log_file_path, mb, &mut hashes);
+            let hash_str = compute_hash(log_file_path, mb, &mut hashes);
             println!("hashstr {:?}", hash_str);
 
-            // SAVE TO DB
-            {
-                let tx = conn.transaction().unwrap();
-                tx.execute(
-                    "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
-                    params![log_file_path.to_str().unwrap(), hash_str],
-                )
-                .expect("ERROR STORING HASH");
-                tx.commit().expect("Failed to commit transaction");
+            if hash_str == current_hash {
+                println!("NOT WORKING");
+            } else {
+                // SAVE TO DB
+                {
+                    let tx = conn.transaction().unwrap();
+                    tx.execute(
+                        "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
+                        params![log_file_path.to_str().unwrap(), hash_str],
+                    )
+                    .expect("ERROR STORING HASH");
+                    tx.commit().expect("Failed to commit transaction");
+                }
+
+                println!("{:?}", hashes);
+
+                println!("WORKING");
+                mainLogic(log_file_path);
             }
 
-            println!("{:?}", hashes);
             i += 1;
             std::thread::sleep(std::time::Duration::from_secs(5));
         }

@@ -1,6 +1,9 @@
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::{File, metadata};
 
+use std::path::{Path, PathBuf};
+
+use rusqlite::types::FromSql;
 use serde::{Deserialize, Serialize};
 
 use crate::hasher::md5_bits;
@@ -43,7 +46,7 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     Ok(())
 // }
 
-pub fn compute_partitions(
+pub fn compute_hash(
     path: &std::path::Path,
     mb: u32,
     mut hash: &mut Vec<String>,
@@ -86,4 +89,11 @@ pub fn compute_partitions(
     }
 
     hash_str
+}
+
+
+#[derive(Debug)]
+pub struct hash{
+    pub path: PathBuf,
+    pub hash: String
 }
