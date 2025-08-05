@@ -3,44 +3,68 @@
 // TODO: ADD ERRORS
 
 use output::{DatabaseOutput, OutputData};
-use parser::{ApacheLogPaser, LogParser};
+use parser::{ApacheLogParser, LogParser};
 
 use sysinfo::System;
 
 use rusqlite::{params, Connection, Result};
-use utils::{compute_hash, Hash, Config};
+use utils::{compute_hash, Config};
 use clap::Parser;
+use rayon::prelude::*;
 
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::sync::Mutex;
+
+// Configuration constants
+const DEV_MODE: bool = true;
+const DATABASE_PATH: &str = "db/main.db";
+const CHUNK_SIZE_MB: u32 = 20;
 
 mod hasher;
 mod output;
 mod parser;
 mod utils;
 
-const DEV: bool = true;
-
 fn main() -> Result<()> {
     let mut sys = System::new_all();
+    let mut conn = Connection::open(DATABASE_PATH)?;
 
-    
-    let mut conn = Connection::open("db/main.db")?;
+    initialize_database(&mut conn)?;
+    let config = Config::parse();
+    println!("CONFIG: {:?}", config);
 
-    if DEV {
-        let _ = conn.execute("DROP table logs;", []);
+    let log_file_path = Path::new(&config.path);
+    let (_partitions, hashes) = setup_file_processing(log_file_path)?;
+
+    initialize_hash_table(&mut conn)?;
+
+    if config.live_reload {
+        run_live_reload_loop(&mut conn, log_file_path, &mut hashes.clone())?;
+    } else {
+        main_logic(log_file_path);
     }
 
-    // PREPARATE DB CONNECTION, IN FUTURE CHANGE IT
-    //TODO? change ip to number?
+    conn.close().expect("Error closing database");
+    
+    sys.refresh_all();
+    println!("Used memory: {} bytes", sys.used_memory());
+
+    Ok(())
+}
+
+fn initialize_database(conn: &mut Connection) -> Result<()> {
+    if DEV_MODE {
+        let _ = conn.execute("DROP TABLE IF EXISTS logs;", []);
+    }
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY,
             ip TEXT NOT NULL,
-            -- timestamp DATETIME NOT NULL,
             method TEXT NOT NULL,
             path TEXT NOT NULL,
             status_code INTEGER NOT NULL,
@@ -48,36 +72,25 @@ fn main() -> Result<()> {
         )",
         [],
     )?;
+    
+    Ok(())
+}
 
-    // Config
-
-    let config = Config::parse();
-    println!("CONFIG: {:?}", config);
-
-    let log_file_path = Path::new(&config.path);
-    // let log_level = ["INFO", "WARNING", "ERROR", "CRITICAL"];
-    // let parser = ApacheLogPaser;
-    // let output_mode = JsonOutput;
-
-    //* Main program  */
+fn setup_file_processing(log_file_path: &Path) -> Result<(u64, Vec<String>)> {
     let metadata = fs::metadata(log_file_path).expect("No metadata on file");
+    let partitions: u64 = std::cmp::max(metadata.len().div_ceil(2_u64.pow(CHUNK_SIZE_MB)), 1);
+    
+    println!("Partitions required: {}", partitions);
+    
+    let hashes = vec![String::new(); partitions as usize];
+    Ok((partitions, hashes))
+}
 
-    let mb = 20; // Numbers of partitions needed to split the file with 200mb each one
-    let partitions: u64 = std::cmp::max(metadata.len().div_ceil(2_u64.pow(mb)) - 1, 1);
-    println!("Partitions required are {}", partitions);
-
-    let mut hashes: Vec<String> = Vec::with_capacity(partitions as usize);
-
-    for _i in 0..partitions {
-        hashes.push(String::from(""));
+fn initialize_hash_table(conn: &mut Connection) -> Result<()> {
+    if DEV_MODE {
+        let _ = conn.execute("DROP TABLE IF EXISTS hash;", []);
     }
 
-    if DEV {
-        let _ = conn.execute("DROP table hash;", []);
-    }
-
-    // Each MD5 hash is 32 characters long
-    // ! Cant return id
     conn.execute(
         "CREATE TABLE IF NOT EXISTS hash (
             id INTEGER PRIMARY KEY,
@@ -86,106 +99,55 @@ fn main() -> Result<()> {
         )",
         [],
     )?;
+    
+    Ok(())
+}
 
-    // CHECKSUM
-    if config.live_reload {
-        // while true
-        let mut i = 0;
-        while i < 4 {
-            println!("STARTING MAIN LOOP");
+fn run_live_reload_loop(conn: &mut Connection, log_file_path: &Path, hashes: &mut Vec<String>) -> Result<()> {
+    for iteration in 0..4 {
+        println!("Starting main loop iteration: {}", iteration + 1);
 
-            let mut current_hash = String::from("");
+        let current_hash = get_stored_hash(conn, log_file_path)?;
+        let new_hash = compute_hash(log_file_path, CHUNK_SIZE_MB, hashes);
 
-            let p = log_file_path.to_str().unwrap();
-            println!("PATH IS {}", p);
-
-            let fetched_hash_result: Result<Hash> =
-                conn.query_row("SELECT * FROM hash WHERE path = ?1", params![p], |row| {
-                    println!("/ROW: {:?}", row.get::<_, String>(1)?);
-                    Ok(Hash {
-                        path: PathBuf::from(row.get::<_, String>(1)?),
-                        hash: row.get(2)?,
-                    })
-                });
-
-            match fetched_hash_result {
-                Ok(hash) => {
-                    println!("CURRENT HASH: {:?}", hash);
-
-                    // TODO: CHANGE NAMES
-                    current_hash = hash.hash;
-                }
-
-                Err(e) => match e {
-                    // The file hasn't stored a hash before. We can safely continue 
-                    rusqlite::Error::QueryReturnedNoRows => {}
-
-                    // To define later
-                    _other => panic!("Err quering hash from DB"),
-                },
-            }
-
-            // TODO! Check if hash already exists in db, in that case it should be passed as "hashes"
-            // TODO! Also if it hasn't been changed it shouldn't be store again
-            let hash_str = compute_hash(log_file_path, mb, &mut hashes);
-            println!("hashstr {:?}", hash_str);
-
-            if hash_str == current_hash {
-                println!("NOT WORKING");
-            } else {
-                // SAVE TO DB
-                {
-                    let tx = conn.transaction().unwrap();
-                    tx.execute(
-                        "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
-                        params![log_file_path.to_str().unwrap(), hash_str],
-                    )
-                    .expect("ERROR STORING HASH");
-                    tx.commit().expect("Failed to commit transaction");
-                }
-
-                println!("{:?}", hashes);
-
-                println!("WORKING");
-                main_logic(log_file_path);
-            }
-
-            i += 1;
-            std::thread::sleep(std::time::Duration::from_secs(5));
+        if new_hash != current_hash {
+            store_hash(conn, log_file_path, &new_hash)?;
+            println!("File changed, processing...");
+            main_logic(log_file_path);
+        } else {
+            println!("No changes detected");
         }
-    } else {
-        main_logic(log_file_path);
+
+        std::thread::sleep(std::time::Duration::from_secs(5));
     }
+    
+    Ok(())
+}
 
-    conn.close().expect("Err closing db");
+fn get_stored_hash(conn: &mut Connection, log_file_path: &Path) -> Result<String> {
+    let path_str = log_file_path.to_str().unwrap();
+    
+    match conn.query_row("SELECT hash FROM hash WHERE path = ?1", params![path_str], |row| {
+        Ok(row.get::<_, String>(0)?)
+    }) {
+        Ok(hash) => Ok(hash),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(String::new()),
+        Err(e) => Err(e),
+    }
+}
 
-    sys.refresh_all();
-    println!("used memory : {} bytes", sys.used_memory());
-
+fn store_hash(conn: &mut Connection, log_file_path: &Path, hash: &str) -> Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "INSERT OR REPLACE INTO hash (path, hash) VALUES (?1, ?2)",
+        params![log_file_path.to_str().unwrap(), hash],
+    )?;
+    tx.commit()?;
     Ok(())
 }
 
 fn main_logic(log_file_path: &Path) {
-    let mut entries: Vec<utils::LogEntry> = Vec::new();
-
-    //let mut log = LogEntry {ip: [255,255,255,255,255,255], timestamp: Utc::now(), method: String::from("DELETE"), path: String::from("/home/main/jh/5654561654164-4654654654"), status_code: 404, response_size: 2649};
-    //println!("{}", std::mem::size_of::log);
-
-    // Allocations
-    let mut status_code = HashMap::new();
-    // for i in 100..599 {
-    // statusCode.insert(i, 0);
-    // }
-
-    let mut path_frequency: HashMap<u16, HashMap<String, i32>> = HashMap::new();
-    for i in 100..599 {
-        let mut inner_map = HashMap::new();
-        inner_map.insert(String::from(""), 0);
-        path_frequency.insert(i, inner_map);
-    }
-
     // OPEN FILE
-
     let mut f = File::open(log_file_path).expect("Specified file doesn't exist");
 
     let lines_amount = BufReader::new(&f).lines().count();
@@ -193,40 +155,60 @@ fn main_logic(log_file_path: &Path) {
     // Point the buffer back to the start
     let _ = f.seek(SeekFrom::Start(0));
 
-    // Add a reader buffer
+    // Add a reader buffer and collect all lines first
     let file = BufReader::new(f);
+    let lines: Vec<String> = file.lines().collect::<Result<Vec<_>, _>>().unwrap_or_else(|e| {
+        panic!("Problem reading file lines, Error: {:?}", e);
+    });
 
-    for line in file.lines() {
-        if let Ok(entry) = ApacheLogPaser::parse_line(line.unwrap_or_else(|e| {
-            panic!(
-                "Problem parsing the file with the specified parser, Error: {:?}",
-                e
-            );
-        })) {
-            // println!("{:?}", entry);
-            entries.push(entry);
+    // Parse log entries in parallel
+    let entries: Vec<utils::LogEntry> = lines
+        .par_iter()
+        .filter_map(|line| {
+            ApacheLogParser::parse_line(line.clone()).ok()
+        })
+        .collect();
+
+    // Process error analysis in parallel
+    let status_code = Mutex::new(HashMap::new());
+    let path_frequency = Mutex::new({
+        let mut pf = HashMap::new();
+        for i in 100..599 {
+            let mut inner_map = HashMap::new();
+            inner_map.insert(String::from(""), 0);
+            pf.insert(i, inner_map);
         }
-        //println!("{}", dt.to_rfc2822());
-    }
+        pf
+    });
 
-    // TODO: FREQUENCY ANALYSIS
+    let error_codes: Vec<usize> = entries
+        .par_iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            if entry.status_code >= 400 && entry.status_code <= 599 {
+                // Update status code count
+                {
+                    let mut sc = status_code.lock().unwrap();
+                    *sc.entry(entry.status_code).or_insert(0) += 1;
+                }
+                
+                // Update path frequency
+                {
+                    let mut pf = path_frequency.lock().unwrap();
+                    pf.entry(entry.status_code).and_modify(|e| {
+                        *e.entry(entry.path.clone()).or_insert(0) += 1;
+                    });
+                }
+                
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    // TODO: LOGLEVEL ERROR
-    let mut error_codes: Vec<usize> = Vec::new();
-    for (index, entry) in entries.iter().enumerate() {
-        // ERROR processing
-        // if (400..=599).contains(&entry.status_code) {
-        if entry.status_code <= 599 && entry.status_code >= 400 {
-            error_codes.push(index);
-            *status_code.entry(entry.status_code).or_insert(0) += 1;
-            path_frequency.entry(entry.status_code).and_modify(|e| {
-                // e.entry(entry.path.clone()).and_modify(|v| *v += 1).or_insert(1);
-                *e.entry(entry.path.clone()).or_insert(0) += 1;
-                // println!("{}, {:?}", entry.status_code, e);
-            });
-        }
-        //println!("{:?}", entry);
-    }
+    let status_code = status_code.into_inner().unwrap();
+    let path_frequency = path_frequency.into_inner().unwrap();
 
     // for (key, value) in statusCode {
     // if value > 0 { println!("Status {} has a frequency of {}", key, value); }
@@ -264,13 +246,13 @@ fn main_logic(log_file_path: &Path) {
     //     None
     // );
 
-    let conn = Connection::open("db/main.db").expect("msg");
+    let conn = Connection::open(DATABASE_PATH).expect("Failed to open database");
     DatabaseOutput::output(
         lines_amount,
         &error_codes,
         &sorted_status_code,
         &sorted_path,
         &entries,
-        Option::Some(conn),
+        Some(conn),
     );
 }
