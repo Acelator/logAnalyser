@@ -3,7 +3,7 @@
 // TODO: ADD ERRORS
 
 use output::{DatabaseOutput, OutputData};
-use parser::{ApacheLogPaser, LogParser};
+use parser::{ApacheLogParser, LogParser};
 
 use sysinfo::System;
 
@@ -165,7 +165,7 @@ fn main_logic(log_file_path: &Path) {
     let entries: Vec<utils::LogEntry> = lines
         .par_iter()
         .filter_map(|line| {
-            ApacheLogPaser::parse_line(line.clone()).ok()
+            ApacheLogParser::parse_line(line.clone()).ok()
         })
         .collect();
 
@@ -246,13 +246,13 @@ fn main_logic(log_file_path: &Path) {
     //     None
     // );
 
-    let conn = Connection::open("db/main.db").expect("msg");
+    let conn = Connection::open(DATABASE_PATH).expect("Failed to open database");
     DatabaseOutput::output(
         lines_amount,
         &error_codes,
         &sorted_status_code,
         &sorted_path,
         &entries,
-        Option::Some(conn),
+        Some(conn),
     );
 }

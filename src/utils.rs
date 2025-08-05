@@ -1,39 +1,41 @@
 use std::fs::{metadata, File};
 use std::io::{Read, Seek, SeekFrom};
 
-use std::path::PathBuf;
-
 use clap::{command, Parser};
 use serde::{Deserialize, Serialize};
 
 use crate::hasher::md5_bits;
 
-// Determine memory footprint
+/// Represents a parsed log entry with structured data
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LogEntry {
-    // Ip in Ipv6 format (Using net IpAdrr?)
+    /// IP address in simplified format (up to 6 segments)
     pub ip: [u16; 6],
+    /// Timestamp of the request
     #[serde(with = "chrono::serde::ts_seconds")]
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// HTTP method (GET, POST, etc.)
     pub method: String,
+    /// Requested path/URL
     pub path: String,
+    /// HTTP protocol version
     pub protocol: String,
+    /// HTTP status code
     pub status_code: u16,
+    /// Response size in bytes
     pub response_size: usize,
 }
 
-// OPTIMIZAR -> >10% of time spent here
-pub fn to_ip(l: String) -> [u16; 6] {
+/// Parse IP address string into array format
+/// Converts IP segments to u16 values, supporting up to 6 segments
+pub fn to_ip(ip_str: String) -> [u16; 6] {
     let mut ip: [u16; 6] = [0, 0, 0, 0, 0, 0];
+    let segments: Vec<&str> = ip_str.split('.').collect();
 
-    let segments: Vec<&str> = l.split('.').collect();
-
-    // Convert each segment to u16, up to 6 segments
     for (i, segment) in segments.iter().enumerate() {
         if i >= 6 {
             break;
-        } // Don't exceed array bounds
-
+        }
         ip[i] = segment.parse::<u16>().unwrap_or(0);
     }
 
@@ -46,6 +48,19 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     Ok(())
 // }
 
+/// Compute MD5 hash for a file in chunks
+/// 
+/// This function reads a file in chunks and computes MD5 hashes for each chunk.
+/// It can efficiently detect if only part of the file has changed by comparing
+/// hashes chunk by chunk and only recomputing changed portions.
+///
+/// # Arguments
+/// * `path` - Path to the file to hash
+/// * `mb` - Power of 2 for chunk size (e.g., 20 for 1MB chunks)
+/// * `hash` - Mutable vector to store computed hashes
+///
+/// # Returns
+/// Concatenated string of all chunk hashes
 pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> String {
     let mut f = File::open(path).expect("File doesn't exist");
     let file_size = metadata(path).unwrap().len();
@@ -101,19 +116,15 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
     hash.iter().filter(|h| !h.is_empty()).cloned().collect::<String>()
 }
 
-#[derive(Debug)]
-pub struct Hash {
-    #[allow(dead_code)]
-    pub path: PathBuf,
-    pub hash: String,
-}
-
+/// Command line configuration
 #[derive(Parser, Debug)]
 #[command()]
 pub struct Config {
+    /// Path to the log file to analyze
     #[arg(short, long)]
     pub path: String,
 
+    /// Enable live reload mode (monitors file for changes)
     #[arg(short, long)]
     pub live_reload: bool,
 }

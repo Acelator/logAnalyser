@@ -7,144 +7,108 @@ use serde_json::json;
 
 use crate::utils::LogEntry;
 
+/// Trait for outputting processed log analysis data
 pub trait OutputData {
-    // TODO! Make return type a Result to check back at caller code
+    /// Output analysis results in a specific format
+    /// 
+    /// # Arguments
+    /// * `lines_count` - Total number of log lines processed
+    /// * `error_indices` - Indices of log entries that had errors
+    /// * `sorted_status_codes` - Status codes sorted by frequency
+    /// * `sorted_paths` - Paths grouped by status code, sorted by frequency
+    /// * `entries` - All parsed log entries
+    /// * `db` - Optional database connection for database output
     fn output(
         lines_count: usize,
-        error: &Vec<usize>,
-        sorted_status_code: &Vec<(&u16, &i32)>,
-        sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
-        entries: &Vec<LogEntry>,
+        error_indices: &[usize],
+        sorted_status_codes: &[(&u16, &i32)],
+        sorted_paths: &[(u16, Vec<(&String, &i32)>)],
+        entries: &[LogEntry],
         db: Option<Connection>,
     );
 }
 
+/// JSON output implementation
 pub struct JsonOutput;
+
+/// Database output implementation  
 pub struct DatabaseOutput;
 
 impl OutputData for JsonOutput {
     fn output(
         lines_count: usize,
-        error: &Vec<usize>,
-        sorted_status_code: &Vec<(&u16, &i32)>,
-        sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
-        // TODO! Remove argument as it will be always None
-        _: &Vec<LogEntry>,
-        _: Option<Connection>,
+        error_indices: &[usize],
+        sorted_status_codes: &[(&u16, &i32)],
+        sorted_paths: &[(u16, Vec<(&String, &i32)>)],
+        _entries: &[LogEntry], // Unused for JSON output
+        _db: Option<Connection>, // Unused for JSON output
     ) {
-        let mut out = File::create(Path::new("log/log.json")).unwrap();
-        let data = json!({
+        let mut output_file = File::create(Path::new("log/log.json")).unwrap();
+        
+        let json_data = json!({
             "total_logs": lines_count,
-            "error_logs": error.len(),
-            "most_common_error": [
+            "error_logs": error_indices.len(),
+            "most_common_errors": sorted_status_codes.iter().take(3).map(|(code, count)| {
+                let most_frequent_paths = if let Some((_, paths)) = sorted_paths
+                    .iter()
+                    .find(|(status_code, _)| *status_code == **code)
                 {
-                    "status_code": sorted_status_code[0].0,
-                    "frequency": sorted_status_code[0].1,
-                    "most_frequent_paths": [
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[0].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[0].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[1].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[1].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[2].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[0].0).unwrap().1[2].1
-                        }
-                    ]
-                },
-                {
-                    "status_code": sorted_status_code[1].0,
-                    "frequency": sorted_status_code[1].1,
-                    "most_frequent_paths": [
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[0].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[0].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[1].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[1].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[2].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[1].0).unwrap().1[2].1
-                        }
-                    ]
-                },
-                {
-                    "status_code": sorted_status_code[2].0,
-                    "frequency": sorted_status_code[2].1,
-                    "most_frequent_paths": [
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[0].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[0].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[1].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[1].1
-                        },
-                        {
-                            "path": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[2].0,
-                            "frequency": sorted_path.iter().find(|&&(code, _)| code == *sorted_status_code[2].0).unwrap().1[2].1
-                        }
-                    ]
-                }
-            ],
+                    paths.iter().take(3).map(|(path, freq)| {
+                        json!({
+                            "path": path,
+                            "frequency": freq
+                        })
+                    }).collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                    
+                json!({
+                    "status_code": code,
+                    "frequency": count,
+                    "most_frequent_paths": most_frequent_paths
+                })
+            }).collect::<Vec<_>>()
         });
 
-        // let json = serde_json::to_string(&entries).unwrap();
-        // let json = serde_json::to_string(&data).unwrap();
-        // out.write_all(json).unwrap();
-
-        out.write_all(data.to_string().as_bytes()).unwrap();
+        output_file.write_all(json_data.to_string().as_bytes()).unwrap();
     }
 }
 
-// Clenup trait param to only use sorted status ...etc in JsonOutput
 impl OutputData for DatabaseOutput {
     fn output(
         _lines_count: usize,
-        _error: &Vec<usize>,
-        _sorted_status_code: &Vec<(&u16, &i32)>,
-        _sorted_path: &Vec<(u16, Vec<(&String, &i32)>)>,
-        entries: &Vec<LogEntry>,
+        _error_indices: &[usize],
+        _sorted_status_codes: &[(&u16, &i32)],
+        _sorted_paths: &[(u16, Vec<(&String, &i32)>)],
+        entries: &[LogEntry],
         db: Option<Connection>,
     ) {
-        // !TODO CHECK IF DATABSE ALREADY HAS INFORMATION
-        let mut conn = db.unwrap();
-
-        // tx.execute("insert into data (name) values (?1)", ["Sample"])
-        // .expect("");
-        // tx.execute("insert into data (name) values (?1)", ["S"])
-        // .expect("");
+        let mut conn = db.expect("Database connection required for DatabaseOutput");
 
         // Optimize for bulk inserts
-        conn.execute_batch(
-            "
-            PRAGMA synchronous = OFF; -- Don't wait for write confirmation
-        ",
-        )
-        .expect("Failed to set PRAGMA");
+        conn.execute_batch("PRAGMA synchronous = OFF;")
+            .expect("Failed to set PRAGMA");
 
-
-        // TODO!: LOGS ARE BEING STORE EACH TIME
         let tx = conn.transaction().expect("Failed to create transaction");
 
         {
             let mut stmt = tx
                 .prepare_cached(
                     "INSERT OR REPLACE INTO logs (ip, method, path, status_code, response_size) 
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
                 )
                 .expect("Failed to prepare statement");
 
             for entry in entries {
-                let ip_str = entry.ip.iter().map(|ip| ip.to_string()).collect::<String>();
+                let ip_string = entry.ip
+                    .iter()
+                    .map(|segment| segment.to_string())
+                    .collect::<Vec<String>>()
+                    .join(".");
 
                 stmt.execute(params![
-                    ip_str,
+                    ip_string,
                     entry.method,
                     entry.path,
                     entry.status_code,
@@ -152,37 +116,8 @@ impl OutputData for DatabaseOutput {
                 ])
                 .expect("Failed to execute statement");
             }
-        } // Statement is dropped here
+        }
 
-        // Commit the transaction
         tx.commit().expect("Failed to commit transaction");
     }
-
-    // tx.execute(
-    //     "INSERT OR REPLACE INTO logs (ip, method, path, status_code, response_size)
-    //          VALUES (?1, ?2, ?3, ?4, ?5)",
-    //     params![
-    //         ipStr, // Convert IpAddr to string
-    //         // entry.timestamp,
-    //         entry.method,
-    //         entry.path,
-    //         entry.status_code,
-    //         entry.response_size,
-    //     ],
-    // )
-    // .expect("Error in the query to db");
-
-    // tx.execute(
-    //     "INSERT INTO logs (ip, timestamp, method, path, status_code, response_size)
-    //      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-    //     params![
-    //         ipStr, // Convert IpAddr to string
-    //         // entry.timestamp,
-    //         entry.method,
-    //         entry.path,
-    //         entry.status_code,
-    //         entry.response_size,
-    //     ],
-    // )
-    // .expect("Error in the query to db");
 }
