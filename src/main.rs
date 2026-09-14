@@ -7,9 +7,9 @@ use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use rusqlite::{params, Connection, Result};
-use utils::{compute_hash, Hash, Config};
 use clap::Parser;
+use rusqlite::{params, Connection, Result};
+use utils::{compute_hash, Config, Hash};
 
 use std::collections::HashMap;
 use std::fs;
@@ -27,7 +27,6 @@ const DEV: bool = true;
 fn main() -> Result<()> {
     let mut sys = System::new_all();
 
-    
     let mut conn = Connection::open("db/main.db")?;
 
     if DEV {
@@ -117,7 +116,7 @@ fn main() -> Result<()> {
                 }
 
                 Err(e) => match e {
-                    // The file hasn't stored a hash before. We can safely continue 
+                    // The file hasn't stored a hash before. We can safely continue
                     rusqlite::Error::QueryReturnedNoRows => {}
 
                     // To define later

@@ -430,6 +430,6 @@ pub fn md5(input: &str) -> String {
     return compute_md5_digest(&mut input_vec);
 }
 
-pub fn md5_bits(input: & mut Vec<u8>) -> String {
+pub fn md5_bits(input: &mut Vec<u8>) -> String {
     return compute_md5_digest(input);
 }
