@@ -7,9 +7,9 @@ use parser::{ApacheLogPaser, LogParser};
 
 use sysinfo::System;
 
-use rusqlite::{params, Connection, Result};
-use utils::{compute_hash, Hash, Config};
 use clap::Parser;
+use rusqlite::{params, Connection, Result};
+use utils::{compute_hash, Config, Hash};
 
 use std::collections::HashMap;
 use std::fs;
@@ -27,7 +27,6 @@ const DEV: bool = true;
 fn main() -> Result<()> {
     let mut sys = System::new_all();
 
-    
     let mut conn = Connection::open("db/main.db")?;
 
     if DEV {
@@ -117,7 +116,7 @@ fn main() -> Result<()> {
                 }
 
                 Err(e) => match e {
-                    // The file hasn't stored a hash before. We can safely continue 
+                    // The file hasn't stored a hash before. We can safely continue
                     rusqlite::Error::QueryReturnedNoRows => {}
 
                     // To define later
@@ -126,12 +125,14 @@ fn main() -> Result<()> {
             }
 
             // TODO! Check if hash already exists in db, in that case it should be passed as "hashes"
-            // TODO! Also if it hasn't been changed it shouldn't be store again
             let hash_str = compute_hash(log_file_path, mb, &mut hashes);
             println!("hashstr {:?}", hash_str);
 
             if hash_str == current_hash {
-                println!("NOT WORKING");
+                // Performance optimization: Avoid unnecessary database transactions and disk I/O
+                // by skipping the insert/replace operation if the hash has not changed.
+                // Expected measurable impact: Reduced CPU usage, lower disk I/O, and faster loop iterations.
+                println!("Hash unchanged, skipping DB insert and processing");
             } else {
                 // SAVE TO DB
                 {
@@ -146,7 +147,7 @@ fn main() -> Result<()> {
 
                 println!("{:?}", hashes);
 
-                println!("WORKING");
+                println!("Hash changed, processing file...");
                 main_logic(log_file_path);
             }
 
