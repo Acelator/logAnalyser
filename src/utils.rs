@@ -3,7 +3,7 @@ use std::io::{Read, Seek, SeekFrom};
 
 use std::path::PathBuf;
 
-use clap::{command, Parser};
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use crate::hasher::md5_bits;
@@ -139,5 +139,57 @@ mod tests {
     fn test_to_ip_out_of_bounds_u16() {
         // 70000 exceeds u16::MAX (65535)
         assert_eq!(to_ip("70000.1.2.3".to_string()), [0, 1, 2, 3, 0, 0]);
+    }
+
+    #[test]
+    fn test_compute_hash_valid() {
+        use std::io::Write;
+
+        let file_path = std::path::Path::new("test_hash.txt");
+        let mut file = File::create(file_path).unwrap();
+        // create dummy content, just small for mb=0 (1 byte chunk)
+        file.write_all(b"abc").unwrap();
+
+        let mut hash_vec = vec![String::from(""), String::from(""), String::from("")];
+        let result = compute_hash(file_path, 0, &mut hash_vec);
+
+        assert!(result.is_ok());
+        let hash_str = result.unwrap();
+        // Since it loops partition size = mb=0 -> chunk size = 1 byte
+        // metadata.len() == 3 bytes -> 3 div_ceil(1) - 1 -> partitions = 2
+        // It's bounded by metadata().len() which will give partitions=2.
+        // 2 partitions * 32 chars = 64.
+        assert_eq!(hash_str.len(), 64);
+
+        std::fs::remove_file(file_path).unwrap();
+    }
+
+    #[test]
+    fn test_compute_hash_update() {
+        use std::io::Write;
+
+        let file_path = std::path::Path::new("test_hash_update.txt");
+        let mut file = File::create(file_path).unwrap();
+        file.write_all(b"ab").unwrap(); // 2 bytes
+
+        let mut hash_vec = vec![String::from(""), String::from("")];
+        // Compute for the first time
+        let _ = compute_hash(file_path, 0, &mut hash_vec).unwrap();
+
+        let previous_hash_vec = hash_vec.clone();
+
+        // Re-compute with same contents
+        let _ = compute_hash(file_path, 0, &mut hash_vec).unwrap();
+        assert_eq!(hash_vec, previous_hash_vec);
+
+        std::fs::remove_file(file_path).unwrap();
+    }
+
+    #[test]
+    fn test_compute_hash_file_not_found() {
+        let file_path = std::path::Path::new("non_existent_hash.txt");
+        let mut hash_vec = vec![];
+        let result = compute_hash(file_path, 0, &mut hash_vec);
+        assert!(result.is_err());
     }
 }

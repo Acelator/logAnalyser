@@ -16,9 +16,7 @@ use std::convert::TryInto;
 * source code implementation, please reference RFC 1321.
 *
 * (source: https://datatracker.ietf.org/doc/html/rfc1321)
-*
 */
-
 /**
 * This function is specified in the rfc as a way to generate the
 * table that we use in rounds 1-4 as part of the hashing operation.
@@ -29,7 +27,7 @@ fn table_construction_function(i: u32) -> u32 {
     let x: f64 = i as f64;
     let sin_eval = x.sin().abs();
     // note: 4294967296 == 2^32
-    return (4294967296.0 * sin_eval) as u32;
+    (4294967296.0 * sin_eval) as u32
 }
 
 /**
@@ -75,8 +73,8 @@ fn round_one_operations(
     mut b: u32,
     mut c: u32,
     mut d: u32,
-    table: &Vec<u32>,
-    x: &Vec<u32>,
+    table: &[u32],
+    x: &[u32],
 ) -> [u32; 4] {
     macro_rules! round1 {
         ( $a:ident, $b:ident, $c:ident, $d:ident, $k:expr, $s:expr, $i: expr ) => {
@@ -109,7 +107,7 @@ fn round_one_operations(
     round1!(c, d, a, b, 14, 17, 15);
     round1!(b, c, d, a, 15, 22, 16);
 
-    return [a, b, c, d];
+    [a, b, c, d]
 }
 
 /**
@@ -121,8 +119,8 @@ fn round_two_operations(
     mut b: u32,
     mut c: u32,
     mut d: u32,
-    table: &Vec<u32>,
-    x: &Vec<u32>,
+    table: &[u32],
+    x: &[u32],
 ) -> [u32; 4] {
     macro_rules! round2 {
         ( $a:ident, $b:ident, $c:ident, $d:ident, $k:expr, $s:expr, $i:expr) => {
@@ -155,7 +153,7 @@ fn round_two_operations(
     round2!(c, d, a, b, 7, 14, 31);
     round2!(b, c, d, a, 12, 20, 32);
 
-    return [a, b, c, d];
+    [a, b, c, d]
 }
 
 /**
@@ -167,8 +165,8 @@ fn round_three_operations(
     mut b: u32,
     mut c: u32,
     mut d: u32,
-    table: &Vec<u32>,
-    x: &Vec<u32>,
+    table: &[u32],
+    x: &[u32],
 ) -> [u32; 4] {
     macro_rules! round3 {
         ( $a:ident, $b:ident, $c:ident, $d:ident, $k:expr, $s:expr, $i:expr  ) => {
@@ -201,7 +199,7 @@ fn round_three_operations(
     round3!(c, d, a, b, 15, 16, 47);
     round3!(b, c, d, a, 2, 23, 48);
 
-    return [a, b, c, d];
+    [a, b, c, d]
 }
 
 /**
@@ -213,8 +211,8 @@ fn round_four_operations(
     mut b: u32,
     mut c: u32,
     mut d: u32,
-    table: &Vec<u32>,
-    x: &Vec<u32>,
+    table: &[u32],
+    x: &[u32],
 ) -> [u32; 4] {
     macro_rules! round4 {
         ( $a:ident, $b:ident, $c:ident, $d:ident, $k:expr, $s:expr, $i:expr ) => {
@@ -247,7 +245,7 @@ fn round_four_operations(
     round4!(c, d, a, b, 2, 15, 63);
     round4!(b, c, d, a, 9, 21, 64);
 
-    return [a, b, c, d];
+    [a, b, c, d]
 }
 
 /**
@@ -262,8 +260,8 @@ fn convert_u8_chunk_to_u32(chunk: &mut [u8]) -> Vec<u32> {
     // iterate over our block and take
     // our 8 bit ints and convert them to
     // 32 bit integers
-    for i in 0..chunk.len() {
-        temporary_vec.push(chunk[i]);
+    for val in chunk.iter() {
+        temporary_vec.push(*val);
         count += 1;
         if count == 4 {
             let temp_arr: [u8; 4] = vec_to_array(temporary_vec.clone());
@@ -273,10 +271,10 @@ fn convert_u8_chunk_to_u32(chunk: &mut [u8]) -> Vec<u32> {
             temporary_vec.clear();
         }
     }
-    return x;
+    x
 }
 
-fn compute_md5_digest(v: &mut Vec<u8>) -> String {
+fn compute_md5_digest(v: &mut [u8]) -> String {
     // as described in the rfc,
     // 4 32-bit words initialized as fixed constants.
     let mut word_a = 0x67452301u32;
@@ -344,7 +342,7 @@ fn compute_md5_digest(v: &mut Vec<u8>) -> String {
         word_c.swap_bytes(),
         word_d.swap_bytes()
     );
-    return message_digest;
+    message_digest
 }
 
 /*
@@ -373,11 +371,12 @@ fn bit_padding(input: &str) -> Vec<u8> {
     let length_bits_as_u8_array = split_u64_to_u8_array(bit_length);
     input_vector.extend(length_bits_as_u8_array);
 
-    return input_vector;
+    input_vector
 }
 
 fn split_u64_to_u8_array(s: u64) -> [u8; 8] {
-    let u8_array = [
+
+    [
         s as u8,
         (s >> 8) as u8,
         (s >> 16) as u8,
@@ -386,8 +385,7 @@ fn split_u64_to_u8_array(s: u64) -> [u8; 8] {
         (s >> 40) as u8,
         (s >> 48) as u8,
         (s >> 56) as u8,
-    ];
-    return u8_array;
+    ]
 }
 
 fn construct_value_table() -> Vec<u32> {
@@ -396,7 +394,7 @@ fn construct_value_table() -> Vec<u32> {
     for i in 1..=64 {
         t.push(table_construction_function(i));
     }
-    return t;
+    t
 }
 
 // this should only work with utf-8 encoding and not full unicode support
@@ -404,7 +402,7 @@ fn construct_value_table() -> Vec<u32> {
 fn convert_str_to_vec(input: &str) -> Vec<u8> {
     let mut byte_vec: Vec<u8> = Vec::new();
     byte_vec.extend(input.as_bytes());
-    return byte_vec;
+    byte_vec
 }
 
 /**
@@ -427,11 +425,11 @@ fn convert_str_to_vec(input: &str) -> Vec<u8> {
 #[allow(dead_code)]
 pub fn md5(input: &str) -> String {
     let mut input_vec = bit_padding(input);
-    return compute_md5_digest(&mut input_vec);
+    compute_md5_digest(&mut input_vec)
 }
 
-pub fn md5_bits(input: &mut Vec<u8>) -> String {
-    return compute_md5_digest(input);
+pub fn md5_bits(input: &mut [u8]) -> String {
+    compute_md5_digest(input)
 }
 
 #[cfg(test)]
