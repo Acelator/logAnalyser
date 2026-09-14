@@ -46,17 +46,20 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     Ok(())
 // }
 
-pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> String {
-    let mut f = File::open(path).expect("File doesn't exist");
+pub fn compute_hash(
+    path: &std::path::Path,
+    mb: u32,
+    hash: &mut Vec<String>,
+) -> std::io::Result<String> {
+    let mut f = File::open(path)?;
 
-    let partitions: u64 =
-        std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
+    let partitions: u64 = std::cmp::max(metadata(path)?.len().div_ceil(2_u64.pow(mb)) - 1, 1);
 
     for _i in 0..partitions {
-        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i)).unwrap();
+        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))?;
 
         let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-        f.read_exact(&mut buf).unwrap();
+        f.read_exact(&mut buf)?;
 
         let current_hash_i = md5_bits(&mut buf);
         println!("size {}", std::mem::size_of_val(&current_hash_i));
@@ -64,10 +67,10 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         if current_hash_i != hash[_i as usize] {
             println!("IM TIRED BOSS");
             for j in _i..partitions {
-                f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j)).unwrap();
+                f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j))?;
 
                 let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-                f.read_exact(&mut buf).unwrap();
+                f.read_exact(&mut buf)?;
 
                 let current_hash_j = md5_bits(&mut buf);
                 hash[j as usize] = current_hash_j;
@@ -84,7 +87,7 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         hash_str.push_str(hash);
     }
 
-    hash_str
+    Ok(hash_str)
 }
 
 #[derive(Debug)]
@@ -102,4 +105,39 @@ pub struct Config {
 
     #[arg(short, long)]
     pub live_reload: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_ip_happy_path() {
+        assert_eq!(to_ip("192.168.1.1".to_string()), [192, 168, 1, 1, 0, 0]);
+        assert_eq!(to_ip("10.0.0.1.2.3".to_string()), [10, 0, 0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_to_ip_more_than_6_segments() {
+        assert_eq!(to_ip("1.2.3.4.5.6.7.8".to_string()), [1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_to_ip_non_numeric_segments() {
+        assert_eq!(to_ip("192.168.abc.1".to_string()), [192, 168, 0, 1, 0, 0]);
+        assert_eq!(to_ip("foo.bar.baz".to_string()), [0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_to_ip_empty_string() {
+        // "".split('.') yields one empty string segment `[""]`
+        // "".parse::<u16>() is an error, so it returns 0.
+        assert_eq!(to_ip("".to_string()), [0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_to_ip_out_of_bounds_u16() {
+        // 70000 exceeds u16::MAX (65535)
+        assert_eq!(to_ip("70000.1.2.3".to_string()), [0, 1, 2, 3, 0, 0]);
+    }
 }

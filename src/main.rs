@@ -125,30 +125,42 @@ fn main() -> Result<()> {
             }
 
             // TODO! Check if hash already exists in db, in that case it should be passed as "hashes"
-            let hash_str = compute_hash(log_file_path, mb, &mut hashes);
-            println!("hashstr {:?}", hash_str);
+            // TODO! Also if it hasn't been changed it shouldn't be store again
+            let hash_result = compute_hash(log_file_path, mb, &mut hashes);
 
-            if hash_str == current_hash {
-                // Performance optimization: Avoid unnecessary database transactions and disk I/O
-                // by skipping the insert/replace operation if the hash has not changed.
-                // Expected measurable impact: Reduced CPU usage, lower disk I/O, and faster loop iterations.
-                println!("Hash unchanged, skipping DB insert and processing");
-            } else {
-                // SAVE TO DB
-                {
-                    let tx = conn.transaction().unwrap();
-                    tx.execute(
-                        "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
-                        params![log_file_path.to_str().unwrap(), hash_str],
-                    )
-                    .expect("ERROR STORING HASH");
-                    tx.commit().expect("Failed to commit transaction");
+            match hash_result {
+                Ok(hash_str) => {
+                    println!("hashstr {:?}", hash_str);
+
+                    if hash_str == current_hash {
+                        println!("NOT WORKING");
+                    } else {
+                        // SAVE TO DB
+                        {
+                            let tx = conn.transaction().unwrap();
+                            tx.execute(
+                                "INSERT OR REPLACE INTO hash (path, hash)  VALUES (?1, ?2)",
+                                params![log_file_path.to_str().unwrap(), hash_str],
+                            )
+                            .expect("ERROR STORING HASH");
+                            tx.commit().expect("Failed to commit transaction");
+                        }
+
+                        println!("{:?}", hashes);
+
+                        println!("WORKING");
+                        main_logic(log_file_path);
+                    }
                 }
-
-                println!("{:?}", hashes);
-
-                println!("Hash changed, processing file...");
-                main_logic(log_file_path);
+                Err(e) => {
+                    eprintln!(
+                        "Error computing hash for {}: {}",
+                        log_file_path.display(),
+                        e
+                    );
+                    // Decide to continue loop or break, in a live reload we should continue waiting
+                    // Continue waiting for the file to become available/readable
+                }
             }
 
             i += 1;
