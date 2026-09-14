@@ -433,3 +433,64 @@ pub fn md5(input: &str) -> String {
 pub fn md5_bits(input: &mut Vec<u8>) -> String {
     return compute_md5_digest(input);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_md5_empty_string() {
+        assert_eq!(md5(""), "d41d8cd98f00b204e9800998ecf8427e");
+    }
+
+    #[test]
+    fn test_md5_a() {
+        assert_eq!(md5("a"), "0cc175b9c0f1b6a831c399e269772661");
+    }
+
+    #[test]
+    fn test_md5_abc() {
+        assert_eq!(md5("abc"), "900150983cd24fb0d6963f7d28e17f72");
+    }
+
+    #[test]
+    fn test_md5_message_digest() {
+        assert_eq!(md5("message digest"), "f96b697d7cb7938d525a2f31aaf161d0");
+    }
+
+    #[test]
+    fn test_md5_alphabet() {
+        assert_eq!(
+            md5("abcdefghijklmnopqrstuvwxyz"),
+            "c3fcd3d76192e4007dfb496cca67e13b"
+        );
+    }
+
+    #[test]
+    fn test_md5_alphanumeric() {
+        assert_eq!(
+            md5("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"),
+            "d174ab98d277d9f5a5611c2c9f419d9f"
+        );
+    }
+
+    #[test]
+    fn test_md5_long_string() {
+        assert_eq!(
+            md5("12345678901234567890123456789012345678901234567890123456789012345678901234567890"),
+            "57edf4a22be3c955ac49da2e2107b67a"
+        );
+    }
+
+    #[test]
+    fn test_md5_bits() {
+        // Test md5_bits with the pre-padded vector of the empty string
+        // An empty string in md5 is padded to a 64-byte vector (512 bits)
+        let mut padded_empty = bit_padding("");
+        assert_eq!(md5_bits(&mut padded_empty), "d41d8cd98f00b204e9800998ecf8427e");
+
+        // Test md5_bits with pre-padded vector of "abc"
+        let mut padded_abc = bit_padding("abc");
+        assert_eq!(md5_bits(&mut padded_abc), "900150983cd24fb0d6963f7d28e17f72");
+    }
+}
