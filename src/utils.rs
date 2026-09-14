@@ -23,18 +23,11 @@ pub struct LogEntry {
 }
 
 // OPTIMIZAR -> >10% of time spent here
-pub fn to_ip(l: String) -> [u16; 6] {
-    let mut ip: [u16; 6] = [0, 0, 0, 0, 0, 0];
+pub fn to_ip(l: &str) -> [u16; 6] {
+    let mut ip: [u16; 6] = [0; 6];
 
-    let segments: Vec<&str> = l.split('.').collect();
-
-    // Convert each segment to u16, up to 6 segments
-    for (i, segment) in segments.iter().enumerate() {
-        if i >= 6 {
-            break;
-        } // Don't exceed array bounds
-
-        ip[i] = segment.parse::<u16>().unwrap_or(0);
+    for (i, segment) in l.split('.').take(6).enumerate() {
+        ip[i] = segment.parse().unwrap_or(0);
     }
 
     ip
@@ -53,8 +46,7 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
 
     for _i in 0..partitions {
-        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))
-            .unwrap();
+        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i)).unwrap();
 
         let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
         f.read_exact(&mut buf).unwrap();

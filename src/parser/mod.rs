@@ -3,7 +3,7 @@ use crate::utils::*;
 use chrono::prelude::*;
 
 pub trait LogParser {
-    fn parse_line(line: String) -> Result<LogEntry, Box<dyn std::error::Error>>;
+    fn parse_line(line: &str) -> Result<LogEntry, Box<dyn std::error::Error>>;
 }
 
 // Common log format
@@ -12,50 +12,50 @@ pub trait LogParser {
 pub struct ApacheLogPaser;
 
 impl LogParser for ApacheLogPaser {
-    // String or &str?
-    fn parse_line(line: String) -> Result<LogEntry, Box<dyn std::error::Error>> {
-        let mut l = line;
+    fn parse_line(line: &str) -> Result<LogEntry, Box<dyn std::error::Error>> {
+        let ip_end = line.find(' ').ok_or("Invalid format: no IP")?;
+        let ip = &line[..ip_end];
 
-        let ip = l.chars().take_while(|&c| c != ' ').collect::<String>();
+        let date_start = line.find('[').ok_or("Invalid format: no date start")? + 1;
+        let date_end = line[date_start..]
+            .find(']')
+            .ok_or("Invalid format: no date end")?
+            + date_start;
+        let date = &line[date_start..date_end];
+        let dt = DateTime::parse_from_str(date, "%d/%b/%Y:%H:%M:%S %z")?;
 
-        // Not efficient? ( O(n) )
-        l = l.split_off(ip.len() + 6);
+        let args_start = line.find('"').ok_or("Invalid format: no args start")? + 1;
+        let args_end = line[args_start..]
+            .find('"')
+            .ok_or("Invalid format: no args end")?
+            + args_start;
+        let args = &line[args_start..args_end];
 
-        // Date operations
-        let date = l.chars().take_while(|&c| c != ']').collect::<String>();
-        l = l.split_off(date.len() + 3);
-        let dt = DateTime::parse_from_str(&date, "%d/%b/%Y:%H:%M:%S %z")?;
+        let mut args_split = args.split(' ');
+        let method = args_split.next().unwrap_or("").to_string();
+        let path = args_split.next().unwrap_or("").to_string();
+        let protocol = args_split.next().unwrap_or("").to_string();
 
-        let args = l.chars().take_while(|&c| c != '"').collect::<String>();
-        l = l.split_off(args.len() + 2);
+        let status_start = args_end + 2;
+        let status_end = line[status_start..]
+            .find(' ')
+            .ok_or("Invalid format: no status")?
+            + status_start;
+        let status = &line[status_start..status_end];
 
-        let args_segments: Vec<&str> = args.split(' ').collect();
-
-        // Status codes go from 100 to 599 (500 options)
-        // 100 - 199 Info
-        // 200 - 299 Success
-        // 300 - 399 Redirection
-        // 400 - 499 Client error
-        // 500 - 599 Server error
-        let status = l.chars().take_while(|&c| c != ' ').collect::<String>();
-        l = l.split_off(status.len() + 1);
-
-        // Update hashmap of statusCodes to allow for frequency analysis
-        //*statusCode.entry(status).or_insert(0) += 1;
-
-        let size = l;
+        let size = &line[status_end + 1..];
 
         // Everything is parsed, now we can create the LogEntry
         let entry = LogEntry {
             ip: to_ip(ip),
             timestamp: dt.into(),
 
-            method: args_segments[0].to_string(),
-            path: args_segments[1].to_string(),
-            protocol: args_segments[2].to_string(),
+            method,
+            path,
+            protocol,
 
             status_code: status.parse::<u16>()?,
-            response_size: size.parse::<usize>()?,
+            response_size: size.parse::<usize>().unwrap_or(0),
         };
 
         Ok(entry)
