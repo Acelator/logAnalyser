@@ -53,8 +53,7 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
 
     for _i in 0..partitions {
-        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))
-            .unwrap();
+        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i)).unwrap();
 
         let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
         f.read_exact(&mut buf).unwrap();

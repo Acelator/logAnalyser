@@ -61,3 +61,51 @@ impl LogParser for ApacheLogPaser {
         Ok(entry)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_line_happy_path() {
+        let line =
+            "127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 2326"
+                .to_string();
+        let result = ApacheLogPaser::parse_line(line);
+        assert!(result.is_ok());
+
+        let entry = result.unwrap();
+        assert_eq!(entry.ip, [127, 0, 0, 1, 0, 0]);
+        assert_eq!(entry.method, "GET");
+        assert_eq!(entry.path, "/apache_pb.gif");
+        assert_eq!(entry.protocol, "HTTP/1.0");
+        assert_eq!(entry.status_code, 200);
+        assert_eq!(entry.response_size, 2326);
+    }
+
+    #[test]
+    fn test_parse_line_invalid_date() {
+        let line =
+            "127.0.0.1 - - [InvalidDate] \"GET /apache_pb.gif HTTP/1.0\" 200 2326".to_string();
+        let result = ApacheLogPaser::parse_line(line);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_invalid_status() {
+        let line =
+            "127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" ABC 2326"
+                .to_string();
+        let result = ApacheLogPaser::parse_line(line);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_invalid_size() {
+        let line =
+            "127.0.0.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 ABC"
+                .to_string();
+        let result = ApacheLogPaser::parse_line(line);
+        assert!(result.is_err());
+    }
+}
