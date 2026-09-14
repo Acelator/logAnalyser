@@ -46,18 +46,20 @@ pub fn to_ip(l: String) -> [u16; 6] {
 //     Ok(())
 // }
 
-pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> String {
-    let mut f = File::open(path).expect("File doesn't exist");
+pub fn compute_hash(
+    path: &std::path::Path,
+    mb: u32,
+    hash: &mut Vec<String>,
+) -> std::io::Result<String> {
+    let mut f = File::open(path)?;
 
-    let partitions: u64 =
-        std::cmp::max(metadata(path).unwrap().len().div_ceil(2_u64.pow(mb)) - 1, 1);
+    let partitions: u64 = std::cmp::max(metadata(path)?.len().div_ceil(2_u64.pow(mb)) - 1, 1);
 
     for _i in 0..partitions {
-        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))
-            .unwrap();
+        f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * _i))?;
 
         let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-        f.read_exact(&mut buf).unwrap();
+        f.read_exact(&mut buf)?;
 
         let current_hash_i = md5_bits(&mut buf);
         println!("size {}", std::mem::size_of_val(&current_hash_i));
@@ -65,10 +67,10 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         if current_hash_i != hash[_i as usize] {
             println!("IM TIRED BOSS");
             for j in _i..partitions {
-                f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j)).unwrap();
+                f.seek(SeekFrom::Start(2_i32.pow(mb) as u64 * j))?;
 
                 let mut buf = vec![0u8; 2_u64.pow(mb) as usize];
-                f.read_exact(&mut buf).unwrap();
+                f.read_exact(&mut buf)?;
 
                 let current_hash_j = md5_bits(&mut buf);
                 hash[j as usize] = current_hash_j;
@@ -85,7 +87,7 @@ pub fn compute_hash(path: &std::path::Path, mb: u32, hash: &mut Vec<String>) -> 
         hash_str.push_str(hash);
     }
 
-    hash_str
+    Ok(hash_str)
 }
 
 #[derive(Debug)]
