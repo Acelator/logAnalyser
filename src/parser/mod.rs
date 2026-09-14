@@ -55,7 +55,7 @@ impl LogParser for ApacheLogPaser {
             protocol,
 
             status_code: status.parse::<u16>()?,
-            response_size: size.parse::<usize>().unwrap_or(0),
+            response_size: size.trim().parse::<usize>().unwrap_or(0),
         };
 
         Ok(entry)

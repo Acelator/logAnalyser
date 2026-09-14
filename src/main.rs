@@ -172,41 +172,30 @@ fn main_logic(log_file_path: &Path) {
 
     // Allocations
     let mut status_code = HashMap::new();
-    // for i in 100..599 {
-    // statusCode.insert(i, 0);
-    // }
 
     let mut path_frequency: HashMap<u16, HashMap<String, i32>> = HashMap::new();
-    for i in 100..599 {
-        let mut inner_map = HashMap::new();
-        inner_map.insert(String::from(""), 0);
-        path_frequency.insert(i, inner_map);
-    }
 
     // OPEN FILE
 
-    let mut f = File::open(log_file_path).expect("Specified file doesn't exist");
-
-    let lines_amount = BufReader::new(&f).lines().count();
-
-    // Point the buffer back to the start
-    let _ = f.seek(SeekFrom::Start(0));
+    let f = File::open(log_file_path).expect("Specified file doesn't exist");
 
     // Add a reader buffer
-    let file = BufReader::new(f);
+    let mut file = BufReader::new(f);
+    let mut lines_amount = 0;
+    let mut line_buffer = String::new();
 
-    for line in file.lines() {
-        let unwrapped_line = line.unwrap_or_else(|e| {
-            panic!(
-                "Problem parsing the file with the specified parser, Error: {:?}",
-                e
-            );
-        });
-        if let Ok(entry) = ApacheLogPaser::parse_line(&unwrapped_line) {
-            // println!("{:?}", entry);
+    while file.read_line(&mut line_buffer).unwrap_or_else(|e| {
+        panic!(
+            "Problem parsing the file with the specified parser, Error: {:?}",
+            e
+        );
+    }) > 0
+    {
+        lines_amount += 1;
+        if let Ok(entry) = ApacheLogPaser::parse_line(&line_buffer) {
             entries.push(entry);
         }
-        //println!("{}", dt.to_rfc2822());
+        line_buffer.clear();
     }
 
     // TODO: FREQUENCY ANALYSIS
@@ -219,11 +208,9 @@ fn main_logic(log_file_path: &Path) {
         if entry.status_code <= 599 && entry.status_code >= 400 {
             error_codes.push(index);
             *status_code.entry(entry.status_code).or_insert(0) += 1;
-            path_frequency.entry(entry.status_code).and_modify(|e| {
-                // e.entry(entry.path.clone()).and_modify(|v| *v += 1).or_insert(1);
-                *e.entry(entry.path.clone()).or_insert(0) += 1;
-                // println!("{}, {:?}", entry.status_code, e);
-            });
+
+            let e = path_frequency.entry(entry.status_code).or_default();
+            *e.entry(entry.path.clone()).or_insert(0) += 1;
         }
         //println!("{:?}", entry);
     }
